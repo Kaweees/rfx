@@ -1,0 +1,40 @@
+[package]
+name = "rfx-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Core Rust library for rfx robotics framework"
+
+[features]
+default = ["hardware-go2", "hardware-so101"]
+# Native CycloneDDS backend (requires system library)
+dds-cyclone = []
+hardware-go2 = ["dep:dust_dds", "dep:crc32fast"]
+hardware-so101 = ["dep:serialport"]
+
+[dependencies]
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+nalgebra.workspace = true
+crossbeam-channel.workspace = true
+parking_lot.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+# DDS communication
+dust_dds = { workspace = true, optional = true }
+crc32fast = { workspace = true, optional = true }
+arrayvec = { version = "0.7", features = ["serde"] }
+
+# Serial communication (for SO-101)
+serialport = { version = "4.3", optional = true }
+
+[dev-dependencies]
+approx.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
+criterion.workspace = true
+
+[[bench]]
+name = "control_loop"
+harness = false
