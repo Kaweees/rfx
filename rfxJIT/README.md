@@ -6,10 +6,32 @@ Workstream for JIT-related systems in rfx:
 - runtime execution plans
 - performance experiments
 
-Design target:
-- PyTorch-like ergonomics for model code
-- JAX-style functional transforms (`grad`, `value_and_grad`) over IR
-- TVM-style pass pipeline (optimization and lowering) while staying tiny/hackable
+rfxJIT is inspired by PyTorch (ergonomics), JAX (functional transforms and
+IR-based AD), and TVM (scheduling and codegen), while staying intentionally
+tiny and hackable.
+
+## How It Compares
+
+### PyTorch
+
+- Similar: eager Tensor API, autograd, optim, and basic datasets/layers.
+- Similar: familiar training loops.
+- Different: the full compiler and IR are visible and easy to modify.
+
+### JAX
+
+- Similar: IR-based autodiff over primitives.
+- Similar: function-level JIT via TinyJIT-style capture and replay.
+- Different: fewer transforms today (for example, no full `vmap`/`pmap` yet),
+  but much smaller and easier to read.
+
+### TVM
+
+- Similar: multiple lowering passes, scheduling, and beam-search-style kernel
+  exploration.
+- Similar: device graph style batched execution.
+- Different: rfxJIT is coupled with a front-end framework (`rfx`) rather than
+  only being a compiler stack.
 
 ## Current Focus
 
