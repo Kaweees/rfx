@@ -6,3 +6,9 @@ Scope examples:
 - dispatch queues
 - buffer lifetime tracking
 - kernel launch interfaces
+
+Current files:
+- `interpreter.py`: phase 0 reference execution path
+- `executor.py`: lowered phase 1 executor
+- `queue.py`: dispatch worker queue for lowered kernels
+- `benchmark.py`: baseline vs IR/lowered/queue timing harness

@@ -26,6 +26,13 @@ Workstream for JIT-related systems in rfx:
 - benchmark harness: `rfxJIT/runtime/benchmark.py`
 - tests: `rfxJIT/tests/test_ir.py`
 
+## Phase 1 Status
+
+- IR lowering to slot-based executable form: `rfxJIT/kernels/lowering.py`
+- lowered-kernel executor: `rfxJIT/runtime/executor.py`
+- single-worker dispatch queue: `rfxJIT/runtime/queue.py`
+- lowering/queue tests: `rfxJIT/tests/test_lowering_queue.py`
+
 Run the benchmark:
 
 ```bash

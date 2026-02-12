@@ -8,9 +8,9 @@
 
 ## Phase 1: Lowering + Runtime
 
-- IR to executable kernel lowering prototype.
-- Runtime queue for kernel dispatch.
-- Validation tests on deterministic kernels.
+- IR to executable kernel lowering prototype. (initial version landed)
+- Runtime queue for kernel dispatch. (single-worker version landed)
+- Validation tests on deterministic kernels. (lowering + queue tests landed)
 
 ## Phase 2: Optimization
 

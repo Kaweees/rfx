@@ -6,3 +6,7 @@ Scope examples:
 - IR node definitions
 - lowering rules
 - generated kernel validation fixtures
+
+Current files:
+- `ir.py`: typed phase 0 kernel IR
+- `lowering.py`: phase 1 lowering into slot-based instructions

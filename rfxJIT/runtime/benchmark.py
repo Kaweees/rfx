@@ -1,4 +1,4 @@
-"""Baseline-vs-IR benchmark harness for phase 0 rfxJIT."""
+"""Baseline-vs-IR benchmark harness for phase 0/1 rfxJIT."""
 
 from __future__ import annotations
 
@@ -8,7 +8,10 @@ import time
 import numpy as np
 
 from rfxJIT.kernels.ir import make_affine_relu_kernel
+from rfxJIT.kernels.lowering import lower_kernel_ir
+from rfxJIT.runtime.executor import execute_lowered_kernel
 from rfxJIT.runtime.interpreter import execute_kernel
+from rfxJIT.runtime.queue import KernelDispatchQueue
 
 
 def baseline_affine_relu(x: np.ndarray, scale: np.ndarray, bias: np.ndarray) -> np.ndarray:
@@ -24,7 +27,13 @@ def benchmark_affine_relu(
     warmup: int,
     seed: int,
 ) -> dict[str, float]:
-    """Benchmark the baseline path against the reference IR interpreter."""
+    """Benchmark baseline, phase 0 IR, phase 1 lowered, and queue dispatch paths."""
+    if iterations <= 0:
+        raise ValueError("iterations must be > 0")
+    if warmup < 0:
+        raise ValueError("warmup must be >= 0")
+    if size <= 0:
+        raise ValueError("size must be > 0")
 
     rng = np.random.default_rng(seed)
     shape = (size,)
@@ -33,10 +42,14 @@ def benchmark_affine_relu(
     bias = rng.standard_normal(size=shape, dtype=np.float32)
 
     kernel = make_affine_relu_kernel(shape=shape)
+    lowered_kernel = lower_kernel_ir(kernel)
 
-    for _ in range(warmup):
-        baseline_affine_relu(x, scale, bias)
-        execute_kernel(kernel, {"x": x, "scale": scale, "bias": bias})
+    with KernelDispatchQueue(autostart=True) as dispatch:
+        for _ in range(warmup):
+            baseline_affine_relu(x, scale, bias)
+            execute_kernel(kernel, {"x": x, "scale": scale, "bias": bias})
+            execute_lowered_kernel(lowered_kernel, {"x": x, "scale": scale, "bias": bias})
+            dispatch.submit(lowered_kernel, {"x": x, "scale": scale, "bias": bias}).result()
 
     baseline_start = time.perf_counter()
     for _ in range(iterations):
@@ -48,22 +61,46 @@ def benchmark_affine_relu(
         y_ir = execute_kernel(kernel, {"x": x, "scale": scale, "bias": bias})
     ir_time = time.perf_counter() - ir_start
 
+    lowered_start = time.perf_counter()
+    for _ in range(iterations):
+        y_lowered = execute_lowered_kernel(lowered_kernel, {"x": x, "scale": scale, "bias": bias})
+    lowered_time = time.perf_counter() - lowered_start
+
+    with KernelDispatchQueue(autostart=True) as dispatch:
+        queue_start = time.perf_counter()
+        for _ in range(iterations):
+            y_queue = dispatch.submit(
+                lowered_kernel,
+                {"x": x, "scale": scale, "bias": bias},
+            ).result()
+        queue_time = time.perf_counter() - queue_start
+
     if not np.allclose(y_baseline, y_ir, atol=1e-6):
         raise RuntimeError("IR output mismatch against baseline")
+    if not np.allclose(y_baseline, y_lowered, atol=1e-6):
+        raise RuntimeError("Lowered output mismatch against baseline")
+    if not np.allclose(y_baseline, y_queue, atol=1e-6):
+        raise RuntimeError("Queue output mismatch against baseline")
 
     return {
         "size": float(size),
         "iterations": float(iterations),
         "baseline_total_s": baseline_time,
         "ir_total_s": ir_time,
+        "lowered_total_s": lowered_time,
+        "queue_total_s": queue_time,
         "baseline_per_iter_ms": (baseline_time / iterations) * 1000.0,
         "ir_per_iter_ms": (ir_time / iterations) * 1000.0,
+        "lowered_per_iter_ms": (lowered_time / iterations) * 1000.0,
+        "queue_per_iter_ms": (queue_time / iterations) * 1000.0,
         "slowdown_x": ir_time / baseline_time if baseline_time > 0 else float("inf"),
+        "lowered_slowdown_x": lowered_time / baseline_time if baseline_time > 0 else float("inf"),
+        "queue_slowdown_x": queue_time / baseline_time if baseline_time > 0 else float("inf"),
     }
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Benchmark phase 0 rfxJIT affine+relu kernel")
+    parser = argparse.ArgumentParser(description="Benchmark phase 0/1 rfxJIT affine+relu kernel")
     parser.add_argument("--size", type=int, default=65536, help="Number of elements in the kernel")
     parser.add_argument("--iterations", type=int, default=200, help="Timing iterations")
     parser.add_argument("--warmup", type=int, default=10, help="Warmup iterations")
@@ -80,11 +117,15 @@ def main() -> None:
         seed=args.seed,
     )
 
-    print("rfxJIT phase0 benchmark")
+    print("rfxJIT phase0/1 benchmark")
     print(f"size={int(results['size'])} iterations={int(results['iterations'])}")
     print(f"baseline_per_iter_ms={results['baseline_per_iter_ms']:.4f}")
     print(f"ir_per_iter_ms={results['ir_per_iter_ms']:.4f}")
     print(f"slowdown_x={results['slowdown_x']:.2f}")
+    print(f"lowered_per_iter_ms={results['lowered_per_iter_ms']:.4f}")
+    print(f"lowered_slowdown_x={results['lowered_slowdown_x']:.2f}")
+    print(f"queue_per_iter_ms={results['queue_per_iter_ms']:.4f}")
+    print(f"queue_slowdown_x={results['queue_slowdown_x']:.2f}")
 
 
 if __name__ == "__main__":
