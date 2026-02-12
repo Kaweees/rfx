@@ -1,0 +1,66 @@
+[workspace]
+resolver = "2"
+members = [
+    "src/crates/rfx-core",
+    "src/crates/rfx-python",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/quantbagel/rfx"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
+
+# Python bindings
+pyo3 = { version = "0.24", features = ["extension-module"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Linear algebra
+nalgebra = { version = "0.33", default-features = false, features = ["std"] }
+
+# Lock-free concurrency
+crossbeam-channel = "0.5"
+parking_lot = "0.12"
+
+# DDS communication (Go2 protocol)
+dust_dds = "0.10"
+crc32fast = "1.4"
+# Note: cyclonedds-rs requires CycloneDDS installed on system
+# cyclonedds-rs = "0.3"
+
+# Utilities
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+# Testing
+approx = "0.5"
+
+# Benchmarking
+criterion = "0.5"
+
+[profile.bench]
+opt-level = 3
+debug = true
+lto = "fat"
+codegen-units = 1
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2
