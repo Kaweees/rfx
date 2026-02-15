@@ -12,61 +12,14 @@ from rfxJIT.kernels.codegen import (
     emit_metal_kernel_source,
     emit_pseudo_asm,
 )
-from rfxJIT.kernels.ir import OpCode, TensorSpec
-from rfxJIT.kernels.lowering import LoweredKernel, LoweredOp
+from rfxJIT.kernels.ir import OpCode
+from rfxJIT.kernels.lowering import LoweredKernel
+from rfxJIT.runtime.core_exec import (
+    coerce_input_array,
+    execute_numpy_op,
+    validate_named_input_contract,
+)
 from rfxJIT.runtime.opcode import OpcodeKernel
-
-
-def _coerce_input(value: np.ndarray, spec: TensorSpec) -> np.ndarray:
-    arr = np.asarray(value, dtype=spec.dtype.value)
-    if arr.shape != spec.shape:
-        raise ValueError(f"Input {spec.name!r} has shape {arr.shape}, expected {spec.shape}")
-    return arr
-
-
-def _execute_op_numpy(
-    op: LoweredOp,
-    values: list[np.ndarray | None],
-    *,
-    shape: tuple[int, ...],
-    dtype: str,
-) -> np.ndarray:
-    if op.op == OpCode.CONST:
-        assert op.const_value is not None
-        return np.full(shape, op.const_value, dtype=dtype)
-
-    args = [values[idx] for idx in op.input_slots]
-    if any(arg is None for arg in args):
-        raise RuntimeError(f"Operation {op.op.value} references unset value slots")
-
-    a0 = args[0]
-    assert a0 is not None
-
-    if op.op == OpCode.NEG:
-        out = -a0
-    elif op.op == OpCode.RELU:
-        out = np.maximum(a0, 0.0)
-    elif op.op == OpCode.STEP:
-        out = (a0 > 0).astype(dtype)
-    elif op.op == OpCode.EXP:
-        out = np.exp(a0)
-    elif op.op == OpCode.LOG:
-        out = np.log(a0)
-    else:
-        a1 = args[1]
-        assert a1 is not None
-        if op.op == OpCode.ADD:
-            out = a0 + a1
-        elif op.op == OpCode.SUB:
-            out = a0 - a1
-        elif op.op == OpCode.MUL:
-            out = a0 * a1
-        elif op.op == OpCode.DIV:
-            out = a0 / a1
-        else:
-            raise ValueError(f"Unsupported op: {op.op}")
-
-    return out.astype(dtype, copy=False)
 
 
 def _execute_lowered_cpu(
@@ -74,27 +27,23 @@ def _execute_lowered_cpu(
     named_inputs: Mapping[str, np.ndarray],
 ) -> np.ndarray:
     input_name_to_slot = kernel.input_name_to_slot()
-    expected_names = set(input_name_to_slot.keys())
-    provided_names = set(named_inputs.keys())
-
-    missing = expected_names - provided_names
-    extra = provided_names - expected_names
-    if missing:
-        raise ValueError(f"Missing required inputs: {sorted(missing)}")
-    if extra:
-        raise ValueError(f"Unexpected inputs provided: {sorted(extra)}")
+    validate_named_input_contract(set(input_name_to_slot.keys()), named_inputs)
 
     values: list[np.ndarray | None] = [None] * len(kernel.value_names)
     for spec in kernel.input_specs:
         slot = input_name_to_slot[spec.name]
-        values[slot] = _coerce_input(named_inputs[spec.name], spec)
+        values[slot] = coerce_input_array(named_inputs[spec.name], spec)
 
     for op in kernel.ops:
-        values[op.out_slot] = _execute_op_numpy(
-            op,
-            values,
+        args = [values[idx] for idx in op.input_slots]
+        if any(arg is None for arg in args):
+            raise RuntimeError(f"Operation {op.op.value} references unset value slots")
+        values[op.out_slot] = execute_numpy_op(
+            op=op.op,
+            args=tuple(arg for arg in args if arg is not None),
             shape=kernel.shape,
             dtype=kernel.dtype.value,
+            const_value=op.const_value,
         )
 
     output = values[kernel.output_slot]
@@ -136,20 +85,12 @@ def _execute_lowered_tinygrad(
 
     tdtype = _tinygrad_dtype(kernel.dtype.value)
     input_name_to_slot = kernel.input_name_to_slot()
-    expected_names = set(input_name_to_slot.keys())
-    provided_names = set(named_inputs.keys())
-
-    missing = expected_names - provided_names
-    extra = provided_names - expected_names
-    if missing:
-        raise ValueError(f"Missing required inputs: {sorted(missing)}")
-    if extra:
-        raise ValueError(f"Unexpected inputs provided: {sorted(extra)}")
+    validate_named_input_contract(set(input_name_to_slot.keys()), named_inputs)
 
     values: list[object | None] = [None] * len(kernel.value_names)
     for spec in kernel.input_specs:
         slot = input_name_to_slot[spec.name]
-        arr = _coerce_input(named_inputs[spec.name], spec)
+        arr = coerce_input_array(named_inputs[spec.name], spec)
         values[slot] = Tensor(arr, device=device, dtype=tdtype)
 
     for op in kernel.ops:
