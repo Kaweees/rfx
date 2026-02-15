@@ -63,6 +63,7 @@ dmypy.json
 # RLM analysis artifacts
 .rlm/
 .rfx/perf-baselines/
+.rfx/teleop-jitter.json
 
 # Moon
 .moon/cache/

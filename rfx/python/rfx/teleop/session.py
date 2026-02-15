@@ -327,6 +327,14 @@ class BimanualSo101Session:
         with self._state_lock:
             return int(self._last_timestamp_ns)
 
+    def reset_timing_stats(self) -> None:
+        """Reset accumulated loop timing counters and histograms."""
+        with self._state_lock:
+            self._period_samples.clear()
+            self._jitter_samples.clear()
+            self._iterations = 0
+            self._overruns = 0
+
     def start_recording(
         self,
         *,
@@ -453,7 +461,13 @@ class BimanualSo101Session:
             next_deadline += target_period
             sleep_s = next_deadline - time.perf_counter()
             if sleep_s > 0:
-                time.sleep(sleep_s)
+                # Hybrid wait strategy: coarse sleep followed by a short busy spin.
+                # Avoiding `sleep(0)` near deadline reduces OS re-schedule jitter spikes.
+                spin_window_s = 0.0012
+                if sleep_s > spin_window_s:
+                    time.sleep(sleep_s - spin_window_s)
+                while time.perf_counter() < next_deadline:
+                    pass
             else:
                 next_deadline = time.perf_counter()
 
