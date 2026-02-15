@@ -26,7 +26,7 @@ resolve_pre_commit() {
 }
 
 chmod +x .githooks/pre-commit .githooks/pre-push
-chmod +x scripts/python-checks.sh
+chmod +x scripts/python-checks.sh scripts/perf-check.sh
 
 PRE_COMMIT_BIN="$(resolve_pre_commit)"
 

@@ -30,6 +30,23 @@ uv pip install --python "$PYTHON_BIN" -e "$ROOT"
 echo "[setup] fetching Rust crates"
 cargo fetch
 
+echo "[setup] probing rfxJIT backend availability"
+if ! "$PYTHON_BIN" - <<'PY'
+from rfxJIT.runtime import available_backends
+
+avail = available_backends()
+enabled = [name for name, ok in avail.items() if ok]
+missing = [name for name in ("cuda", "metal") if not avail.get(name, False)]
+
+print(f"[setup] detected backends: {', '.join(enabled)}")
+if missing:
+    print(f"[setup] warning: optional GPU backends unavailable: {', '.join(missing)}")
+    print("[setup] warning: install tinygrad runtime support and device drivers to enable them")
+PY
+then
+  echo "[setup] warning: backend probe failed; continuing setup" >&2
+fi
+
 echo "[setup] installing git hooks via pre-commit"
 RFX_VENV_PATH="$VENV_PATH" bash "$ROOT/scripts/setup-git-hooks.sh"
 
