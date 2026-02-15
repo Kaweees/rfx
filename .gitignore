@@ -62,6 +62,7 @@ dmypy.json
 
 # RLM analysis artifacts
 .rlm/
+.rfx/perf-baselines/
 
 # Moon
 .moon/cache/

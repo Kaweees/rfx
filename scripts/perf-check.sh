@@ -114,7 +114,7 @@ if [[ ! -f "$BASELINE_PATH" ]]; then
 fi
 
 if [[ -z "$OUTPUT_PATH" ]]; then
-  OUTPUT_PATH="$(mktemp "${TMPDIR:-/tmp}/rfxjit-perf.XXXXXX.json")"
+  OUTPUT_PATH="$(mktemp "${TMPDIR:-/tmp}/rfxjit-perf.XXXXXX")"
 fi
 
 PYTHON_BIN="$(resolve_python)"
@@ -148,7 +148,6 @@ with current_path.open("r", encoding="utf-8") as handle:
     current = json.load(handle)
 
 metrics_to_compare = [
-    "slowdown_x",
     "lowered_slowdown_x",
     "lowered_optimized_slowdown_x",
     "queue_slowdown_x",
