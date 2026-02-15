@@ -1,31 +1,69 @@
 # rfx
 
-## Project North Star
+[<img alt="rfx logo" src="docs/assets/logo.png" width="180" />](https://github.com/quantbagel/rfx)
 
-- `rfxJIT` is the ultra-performance kernel engine for the project.
-- `rfx` remains the product surface, while stable JIT/compiler pieces are promoted into it.
-- Long-term, execution should be `rfxJIT`-first, reducing reliance on Python-to-Rust bindings.
-- Default collaboration flow is atomic commits pushed directly to `main`.
+rfx: For something between PyTorch and a robotics runtime stack.
 
-`rfxJIT` runtime path is feature-flagged:
+[Homepage](https://github.com/quantbagel/rfx) | [Documentation](docs/README.md) | [Discord](https://discord.gg/xV8bAGM8WT) | [X](https://x.com/quantbagel)
 
-```bash
-export RFX_JIT=1
-export RFX_JIT_BACKEND=auto  # auto|cpu|cuda|metal
-export RFX_JIT_STRICT=0      # 1 to raise if requested backend fails
+[![CI](https://github.com/quantbagel/rfx/actions/workflows/ci.yml/badge.svg)](https://github.com/quantbagel/rfx/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![Follow on X](https://img.shields.io/badge/Follow-%40quantbagel-000000?logo=x&logoColor=white)](https://x.com/quantbagel)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Chat-5865F2?logo=discord&logoColor=white)](https://discord.gg/xV8bAGM8WT)
+
+---
+
+rfx is an end-to-end robotics stack:
+
+- Python robotics API for simulation, real hardware, teleoperation, and policy execution
+- `rfxJIT` IR/compiler/runtime that lowers and executes kernels across `cpu`/`cuda`/`metal`
+- Rust core primitives and drivers exposed to Python through PyO3 bindings
+- Local quality and perf gates designed to keep control-loop and kernel regressions visible
+
+It is inspired by PyTorch (ergonomics), JAX (functional transforms and IR-based AD), and TVM (scheduling/codegen), while staying practical for robot workflows.
+
+---
+
+## How rfx compares
+
+### PyTorch
+
+- Similar: familiar Python-first APIs and policy/training workflows.
+- Similar: easy integration with existing model code.
+- Different: rfx ships robotics-native interfaces (`observe`/`act`/`reset`) and runtime hooks for deployment.
+
+### JAX
+
+- Similar: IR-centered runtime approach and JIT-style execution paths.
+- Similar: transform-friendly kernel representation in `rfxJIT`.
+- Different: rfx focuses on robotics control loops and deployment ergonomics over broad functional transform coverage.
+
+### TVM
+
+- Similar: lowering, optimization passes, and backend code generation.
+- Similar: explicit execution/runtime separation.
+- Different: rfx includes the full robotics-facing product surface, not only compiler infrastructure.
+
+---
+
+## Core interface
+
+All robots in rfx implement the same three-method protocol:
+
+```python
+observation = robot.observe()
+robot.act(action)
+robot.reset()
 ```
 
-With `RFX_JIT=1`, `@rfx.policy(jit=True)` can route NumPy policy calls through
-`rfxJIT` while preserving existing fallback behavior.
+This interface is consistent across simulation, real hardware, and teleoperation.
 
-## Install From Source (Recommended)
+## Installation
 
-Prerequisites:
-- `uv`
-- `cargo`/Rust toolchain
-- `git`
+The recommended install for contributors is from source.
 
-Clone + setup:
+### From source
 
 ```bash
 git clone https://github.com/quantbagel/rfx.git
@@ -33,111 +71,38 @@ cd rfx
 bash scripts/setup-from-source.sh
 ```
 
-The setup script now probes `rfxJIT` backend availability and prints warnings
-if optional `CUDA`/`Metal` paths are unavailable.
-
-Manual setup equivalent:
+### Direct (GitHub)
 
 ```bash
-uv venv .venv
-uv pip install --python .venv/bin/python -r requirements-dev.txt
-uv pip install --python .venv/bin/python -e .
-cargo fetch
-./.venv/bin/pre-commit install --install-hooks --hook-type pre-commit --hook-type pre-push
+uv pip install git+https://github.com/quantbagel/rfx.git
 ```
 
-Direct path install (from another repo or workspace):
+### Direct (local path)
 
 ```bash
 uv venv .venv
 uv pip install --python .venv/bin/python -e /absolute/path/to/rfx
 ```
 
-Git URL install (without local source checkout):
+## Runtime switches (`rfxJIT`)
 
 ```bash
-uv pip install git+https://github.com/quantbagel/rfx.git
+export RFX_JIT=1
+export RFX_JIT_BACKEND=auto  # auto|cpu|cuda|metal
+export RFX_JIT_STRICT=0      # 1 to raise if requested backend fails
 ```
 
-`Direct path` and `Git URL` installs are best for usage, not contributor setup.
-Use source install when you want local hooks, CI-parity checks, and editable development.
+With `RFX_JIT=1`, `@rfx.policy(jit=True)` can route NumPy policy calls through `rfxJIT` while preserving fallback behavior.
 
-## Monorepo Layout
+## Quality and performance checks
 
-- `rfx/`: source tree (`crates/`, `python/`, `tests/`, `configs/`, `examples/`)
-- `docs/`: documentation
-- `docs/workflow.md`: contributor and OSS workflow
-- `rfxJIT/`: ultra-performance kernel and compiler engine
-- `cli/`: command-line tooling
-- `.claude/skills/rfx-bootstrap-install/`: Claude skill for agent bootstrap
-
-## Claude Skill Bootstrap
-
-To bootstrap this repo with an agent-oriented workflow:
-
-```bash
-bash .claude/skills/rfx-bootstrap-install/scripts/bootstrap.sh
-```
-
-CLI shortcut:
-
-```bash
-./cli/rfx.sh bootstrap
-```
-
-Teleop bootstrap (macOS/Metal-first workflow):
-
-```bash
-./cli/rfx.sh bootstrap-teleop
-./cli/rfx.sh doctor-teleop
-```
-
-The bootstrap flow attempts to install both `teleop` and `teleop-lerobot`
-extras so direct LeRobot package export is available when dependency resolution succeeds.
-
-Direct source setup shortcut:
-
-```bash
-./cli/rfx.sh setup-source
-```
-
-## Local Quality Gates (pre-commit + pre-push)
-
-Install hooks once per clone:
-
-```bash
-bash scripts/setup-git-hooks.sh
-```
-
-`scripts/setup-from-source.sh` already runs this step.
-
-Dev dependencies are defined in `requirements-dev.txt` for local source installs.
-
-What runs:
-- `pre-commit`: `cargo fmt --all -- --check`, then Ruff on staged Python files.
-- `pre-push`: Rust fmt/clippy/tests, Python Ruff/mypy subset/pytest, local perf regression checks (`cpu` enforced, `cuda`/`metal` attempted when available), plus a teleop jitter gate (`350Hz`, `p99 <= 0.5ms`).
-- Optionally block local direct pushes from `main` by setting `RFX_BLOCK_MAIN_PUSH=1`.
-- Local perf hook baselines are stored under `.rfx/perf-baselines/`.
-
-Run all local gates manually:
+Run local pre-push checks:
 
 ```bash
 ./.venv/bin/pre-commit run --all-files --hook-stage pre-push
 ```
 
-Refresh perf baseline files when needed:
-
-```bash
-bash scripts/perf-baseline.sh --backend all
-```
-
-## CI
-
-- Single CI workflow: `.github/workflows/ci.yml`
-- CI runs on pushes to `main` and on pull requests.
-- CI includes a soft `rfxJIT` CPU perf regression check with JSON artifact upload.
-
-Run the same local perf gate:
+Run the CPU perf gate used in CI:
 
 ```bash
 bash scripts/perf-check.sh \
@@ -146,18 +111,20 @@ bash scripts/perf-check.sh \
   --threshold-pct 10
 ```
 
-## Moon (Monorepo Task Runner)
+## Documentation
 
-This repo now has a Moon workspace:
-- Workspace config: `.moon/workspace.yml`
-- Project configs: `rfx/crates/rfx-core/moon.yml`, `rfx/crates/rfx-python/moon.yml`, `rfx/python/moon.yml`
+- Docs entrypoint: `docs/README.md`
+- Contributor workflow: `docs/workflow.md`
+- Performance workflow: `docs/perf/README.md`
+- Contributing guide: `CONTRIBUTING.md`
 
-Typical commands:
-- `moon run :format`
-- `moon run :lint`
-- `moon run :typecheck`
-- `moon run :test`
-- `moon run :build`
+## Community and support
 
-Python Moon tasks are backed by `scripts/python-checks.sh`.
-Use `scripts/python-checks.sh typecheck-full` (or `RFX_TYPECHECK_FULL=1 scripts/python-checks.sh ci`) for full-package mypy.
+- Issues: https://github.com/quantbagel/rfx/issues
+- Discussions: https://github.com/quantbagel/rfx/discussions
+- Pull requests: https://github.com/quantbagel/rfx/pulls
+- Community expectations: `CODE_OF_CONDUCT.md`
+
+## License
+
+MIT. See `LICENSE`.
