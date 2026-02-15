@@ -2,7 +2,7 @@
 
 [<img alt="rfx logo" src="docs/assets/logo.png" width="180" style="border-radius: 20px;" />](https://github.com/quantbagel/rfx)
 
-rfx: For something between PyTorch and a robotics runtime stack.
+rfx: A ground-up replacement for ROS, built for the foundation model era.
 
 <h3>
 
@@ -19,24 +19,34 @@ rfx: For something between PyTorch and a robotics runtime stack.
 
 ---
 
-rfx is an end-to-end robotics stack:
+rfx is robotics infrastructure for the data and embodiment layer:
 
-- Python robotics API for simulation, real hardware, teleoperation, and policy execution
+- Rust core for real-time performance and safety
+- Python SDK for fast research iteration
+- ROS interop bindings for incremental migration
+- Simulation, teleoperation, and hardware pipelines designed for scalable data collection
 - `rfxJIT` IR/compiler/runtime that lowers and executes kernels across `cpu`/`cuda`/`metal`
-- Rust core primitives and drivers exposed to Python through PyO3 bindings
-- Local quality and perf gates designed to keep control-loop and kernel regressions visible
 
-It is inspired by PyTorch (ergonomics), JAX (functional transforms and IR-based AD), and TVM (scheduling/codegen), while staying practical for robot workflows.
+ROS became the default robotics middleware over the last 15+ years, but it was designed for component message passing, not model-first robotics and large-scale data pipelines. rfx is designed from first principles for that new workflow.
+
+It is inspired by PyTorch (ergonomics), JAX (functional transforms and IR-based AD), and TVM (scheduling/codegen), while explicitly targeting ROS replacement over time.
 
 ---
 
 ## How rfx compares
 
+### ROS
+
+- Similar: robot-facing abstractions, hardware integration, and runtime concerns.
+- Similar: practical interfaces for real robot systems.
+- Different: rfx is built around data collection, embodiment pipelines, and model-driven robotics workflows.
+- Different: ROS interop lets teams migrate incrementally instead of rewriting everything at once.
+
 ### PyTorch
 
 - Similar: familiar Python-first APIs and policy/training workflows.
 - Similar: easy integration with existing model code.
-- Different: rfx ships robotics-native interfaces (`observe`/`act`/`reset`) and runtime hooks for deployment.
+- Different: rfx is more than a tensor/training library and ships robotics-native interfaces (`observe`/`act`/`reset`) plus deployment/runtime hooks.
 
 ### JAX
 
@@ -51,6 +61,17 @@ It is inspired by PyTorch (ergonomics), JAX (functional transforms and IR-based 
 - Different: rfx includes the full robotics-facing product surface, not only compiler infrastructure.
 
 ---
+
+## Repository layout
+
+```
+rfx/            Rust core + Python package + tests + configs + examples
+rfxJIT/         IR compiler and runtime (cpu/cuda/metal backends)
+cli/            Command-line tools
+docs/           Internal docs, perf baselines, contributor workflows
+scripts/        Setup and CI helper scripts
+.github/        GitHub Actions workflows
+```
 
 ## Core interface
 
@@ -118,6 +139,7 @@ bash scripts/perf-check.sh \
 
 ## Documentation
 
+- Full documentation: [deepwiki.com/quantbagel/rfx](https://deepwiki.com/quantbagel/rfx)
 - Docs entrypoint: `docs/README.md`
 - Contributor workflow: `docs/workflow.md`
 - Performance workflow: `docs/perf/README.md`
