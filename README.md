@@ -4,7 +4,7 @@
 
 - `rfxJIT` is the ultra-performance kernel engine for the project.
 - `rfx` remains the product surface, while stable JIT/compiler pieces are promoted into it.
-- Long term, execution should be `rfxJIT`-first, reducing reliance on Python-to-Rust bindings.
+- Long-term, execution should be `rfxJIT`-first, reducing reliance on Python-to-Rust bindings.
 - Default collaboration flow is atomic commits pushed directly to `main`.
 
 `rfxJIT` runtime path is feature-flagged:
@@ -34,7 +34,7 @@ bash scripts/setup-from-source.sh
 ```
 
 The setup script now probes `rfxJIT` backend availability and prints warnings
-if optional `cuda`/`metal` paths are unavailable.
+if optional `CUDA`/`Metal` paths are unavailable.
 
 Manual setup equivalent:
 
@@ -59,7 +59,7 @@ Git URL install (without local source checkout):
 uv pip install git+https://github.com/quantbagel/rfx.git
 ```
 
-`Direct path` and `Git URL` installs are best for consumption, not contributor setup.
+`Direct path` and `Git URL` installs are best for usage, not contributor setup.
 Use source install when you want local hooks, CI-parity checks, and editable development.
 
 ## Monorepo Layout

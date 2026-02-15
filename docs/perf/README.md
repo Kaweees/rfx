@@ -8,7 +8,7 @@
 - Optional GPU baselines:
   - `docs/perf/baselines/rfxjit_microkernels_cuda.json`
   - `docs/perf/baselines/rfxjit_microkernels_metal.json`
-- Initial target kernel: affine+relu phase0/2 microkernel benchmark (`rfxJIT/runtime/benchmark.py`)
+- Initial target kernel: affine+relu phase 0/2 microkernel benchmark (`rfxJIT/runtime/benchmark.py`)
 
 ## Run Locally
 
