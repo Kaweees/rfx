@@ -92,6 +92,9 @@ Teleop bootstrap (macOS/Metal-first workflow):
 ./cli/rfx.sh doctor-teleop
 ```
 
+The bootstrap flow attempts to install both `teleop` and `teleop-lerobot`
+extras so direct LeRobot package export is available when dependency resolution succeeds.
+
 Direct source setup shortcut:
 
 ```bash

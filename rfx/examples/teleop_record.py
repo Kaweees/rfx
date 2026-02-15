@@ -46,6 +46,24 @@ def run_teleop(args):
     recording = False
     current_episode_id = None
 
+    def maybe_export_lerobot(result):
+        if not args.lerobot_repo_id:
+            return
+        try:
+            export_summary = session.recorder.export_episode_to_lerobot(
+                result,
+                repo_id=args.lerobot_repo_id,
+                root=args.lerobot_root,
+                fps=args.camera_fps,
+                task=args.lerobot_task or args.label,
+            )
+            print(
+                f"LeRobot export complete: repo={export_summary['repo_id']} "
+                f"frames={export_summary['frames_added']}"
+            )
+        except Exception as exc:
+            print(f"LeRobot export failed: {exc}")
+
     print("Controls: Enter=start/stop recording, q=quit, h=home")
     quit_flag = [False]
     toggle_record = [False]
@@ -80,6 +98,7 @@ def run_teleop(args):
                 if recording:
                     result = session.stop_recording()
                     print(f"Saved episode {result.episode_id} -> {result.manifest_path}")
+                    maybe_export_lerobot(result)
                     recording = False
                     current_episode_id = None
                 else:
@@ -106,6 +125,7 @@ def run_teleop(args):
         if recording:
             result = session.stop_recording()
             print(f"Saved episode {result.episode_id} -> {result.manifest_path}")
+            maybe_export_lerobot(result)
         session.stop()
 
     stats = session.timing_stats()
@@ -125,5 +145,8 @@ if __name__ == "__main__":
     parser.add_argument("--camera-ids", default="0,1,2")
     parser.add_argument("--camera-fps", type=int, default=30)
     parser.add_argument("--label", default="teleop")
+    parser.add_argument("--lerobot-repo-id", default=None)
+    parser.add_argument("--lerobot-root", default="lerobot_datasets")
+    parser.add_argument("--lerobot-task", default=None)
     parser.add_argument("--output", default="demos")
     run_teleop(parser.parse_args())

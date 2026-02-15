@@ -43,6 +43,10 @@ teleop = [
     "opencv-python>=4.8",
     "torch>=2.2",
 ]
+# Direct LeRobot package export support
+teleop-lerobot = [
+    "lerobot",
+]
 # Development dependencies
 dev = [
     "pytest>=7.0",
@@ -55,6 +59,7 @@ dev = [
 all = [
     "rfx[agent]",
     "rfx[teleop]",
+    "rfx[teleop-lerobot]",
     "rfx[dev]",
 ]
 

@@ -16,15 +16,20 @@ if [[ ! -x "$PYTHON_BIN" ]]; then
 fi
 
 if command -v uv >/dev/null 2>&1; then
-  echo "[bootstrap-teleop] installing teleop extras"
-  uv pip install --python "$PYTHON_BIN" -e "$ROOT[teleop]"
+  echo "[bootstrap-teleop] installing teleop extras (+ LeRobot exporter)"
+  if ! uv pip install --python "$PYTHON_BIN" -e "$ROOT[teleop,teleop-lerobot]"; then
+    echo "[bootstrap-teleop] warning: failed to install teleop-lerobot extras; continuing with core teleop extras"
+    uv pip install --python "$PYTHON_BIN" -e "$ROOT[teleop]"
+  fi
 else
-  echo "[bootstrap-teleop] installing teleop extras with pip"
-  "$PYTHON_BIN" -m pip install -e "$ROOT[teleop]"
+  echo "[bootstrap-teleop] installing teleop extras (+ LeRobot exporter) with pip"
+  if ! "$PYTHON_BIN" -m pip install -e "$ROOT[teleop,teleop-lerobot]"; then
+    echo "[bootstrap-teleop] warning: failed to install teleop-lerobot extras; continuing with core teleop extras"
+    "$PYTHON_BIN" -m pip install -e "$ROOT[teleop]"
+  fi
 fi
 
 echo "[bootstrap-teleop] running diagnostics"
 bash scripts/doctor-teleop.sh
 
 echo "[bootstrap-teleop] complete"
-

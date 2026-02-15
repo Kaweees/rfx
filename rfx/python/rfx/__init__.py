@@ -114,13 +114,20 @@ try:
         CameraStreamConfig,
         JitPolicyConfig,
         InprocTransport,
+        JitterBenchmarkResult,
+        LeRobotExportConfig,
+        LeRobotPackageWriter,
         LeRobotRecorder,
         LoopTimingStats,
         RecordedEpisode,
+        RustSubscription,
+        RustTransport,
         Subscription,
         TeleopSessionConfig,
         TransportConfig,
         TransportEnvelope,
+        assert_jitter_budget,
+        run_jitter_benchmark,
     )
 except ModuleNotFoundError:
     ArmPairConfig = None
@@ -128,13 +135,20 @@ except ModuleNotFoundError:
     CameraStreamConfig = None
     InprocTransport = None
     JitPolicyConfig = None
+    JitterBenchmarkResult = None
+    LeRobotExportConfig = None
+    LeRobotPackageWriter = None
     LeRobotRecorder = None
     LoopTimingStats = None
     RecordedEpisode = None
+    RustSubscription = None
+    RustTransport = None
     Subscription = None
     TeleopSessionConfig = None
     TransportConfig = None
     TransportEnvelope = None
+    assert_jitter_budget = None
+    run_jitter_benchmark = None
 
 # ============================================================================
 # rfx v1 API (backward compatible)
@@ -176,13 +190,20 @@ __all__ = [
     "CameraStreamConfig",
     "InprocTransport",
     "JitPolicyConfig",
+    "JitterBenchmarkResult",
+    "LeRobotExportConfig",
+    "LeRobotPackageWriter",
     "LeRobotRecorder",
     "LoopTimingStats",
     "RecordedEpisode",
+    "RustSubscription",
+    "RustTransport",
     "Subscription",
     "TeleopSessionConfig",
     "TransportConfig",
     "TransportEnvelope",
+    "assert_jitter_budget",
+    "run_jitter_benchmark",
     # v1 API
     "__version__",
     "VERSION",

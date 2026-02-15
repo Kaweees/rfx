@@ -222,6 +222,32 @@ class LeRobotRecorder:
 
             return result
 
+    def export_episode_to_lerobot(
+        self,
+        episode: RecordedEpisode,
+        *,
+        repo_id: str,
+        root: str | Path = Path("lerobot_datasets"),
+        fps: int = 30,
+        robot_type: str = "so101_bimanual",
+        use_videos: bool = True,
+        push_to_hub: bool = False,
+        task: str | None = None,
+    ) -> dict[str, Any]:
+        """Export a finalized episode using the installed LeRobot package."""
+        from .lerobot_writer import LeRobotExportConfig, LeRobotPackageWriter
+
+        config = LeRobotExportConfig(
+            repo_id=repo_id,
+            root=root,
+            fps=fps,
+            robot_type=robot_type,
+            use_videos=use_videos,
+            push_to_hub=push_to_hub,
+        )
+        writer = LeRobotPackageWriter(config)
+        return writer.write_episode(episode, task=task)
+
     def close(self) -> None:
         with self._lock:
             if self._active_episode_id is None:

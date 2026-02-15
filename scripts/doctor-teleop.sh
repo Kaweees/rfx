@@ -39,12 +39,14 @@ status = {
     "rust_bindings": False,
     "torch_available": False,
     "opencv_available": False,
+    "lerobot_available": False,
     "jit_backends": {},
     "camera_probe": [],
 }
 
 status["torch_available"] = importlib.util.find_spec("torch") is not None
 status["opencv_available"] = importlib.util.find_spec("cv2") is not None
+status["lerobot_available"] = importlib.util.find_spec("lerobot") is not None
 
 try:
     import rfx
@@ -92,5 +94,8 @@ if errors:
     sys.exit(2)
 
 print("[doctor-teleop] ready")
+if not status["lerobot_available"]:
+    print(
+        "[doctor-teleop] note: LeRobot package not installed; direct LeRobot export is disabled"
+    )
 PY
-
