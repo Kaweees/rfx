@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rfx-sdk-lerobot"
+version = "0.1.1"
+description = "LeRobot integration package for rfx"
+requires-python = ">=3.13"
+dependencies = ["rfx-sdk>=0.1.1", "lerobot"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

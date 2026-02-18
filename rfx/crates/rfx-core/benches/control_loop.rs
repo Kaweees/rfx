@@ -162,7 +162,7 @@ fn bench_filters(c: &mut Criterion) {
 
     // Moving average — ring buffer, various window sizes
     for window in [4, 16, 64] {
-        group.bench_function(&format!("moving_avg_w{window}_update"), |b| {
+        group.bench_function(format!("moving_avg_w{window}_update"), |b| {
             let mut f = MovingAverageFilter::<64>::new(window);
             let mut i = 0.0_f64;
             b.iter(|| {

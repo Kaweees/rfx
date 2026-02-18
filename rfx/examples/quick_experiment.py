@@ -1,75 +1,72 @@
 #!/usr/bin/env python3
 """
-Quick experimentation examples with pi + tinygrad
+Quick architecture experiments with rfx + tinygrad.
 
-This file shows how easy it is to try new ideas:
-- Custom network architectures
-- Different activation functions
-- Attention mechanisms
-- Recurrent policies
+Shows how to prototype different policy architectures — bigger nets,
+custom activations, residual blocks, self-attention, JIT compilation —
+all in plain Python using tinygrad's transparent tensor API.
 
-The tinygrad-style approach makes experimentation fast and transparent.
+Key concepts:
+    rfx.nn.Policy        — base class for tinygrad policies
+    rfx.nn.MLP           — standard MLP with .load()/.save()
+    rfx.nn.JitPolicy     — @TinyJit wrapper for compiled inference
+    rfx.nn.go2_mlp       — default Go2 policy (48→256→256→12)
 
 Usage:
-    python examples/quick_experiment.py
-"""
+    uv run rfx/examples/quick_experiment.py
 
-import numpy as np
+Requirements:
+    pip install tinygrad
+"""
 
 import rfx
 from rfx.nn import Policy, MLP, go2_mlp
 
-# Check if tinygrad is available
 try:
     from tinygrad import Tensor
     from tinygrad.nn import Linear
 
-    TINYGRAD_AVAILABLE = True
+    TINYGRAD = True
 except ImportError:
-    TINYGRAD_AVAILABLE = False
+    TINYGRAD = False
     print("tinygrad not installed. Install with: pip install tinygrad")
-    print("Showing code examples only.\n")
+    print("Showing code structure only.\n")
 
 
-def experiment_1_bigger_network():
-    """Experiment: What if we use a bigger network?"""
-    print("Experiment 1: Bigger Network")
+# -------------------------------------------------------------------
+# Experiment 1: Bigger network
+# -------------------------------------------------------------------
+
+def exp_bigger_network():
+    print("1. Bigger Network")
     print("-" * 40)
 
-    # Standard policy
     standard = go2_mlp(hidden=[256, 256])
-    print(f"Standard: {standard}")
-
-    # Bigger policy
     bigger = MLP(48, 12, hidden=[512, 512, 512])
-    print(f"Bigger:   {bigger}")
+    print(f"  Standard: {standard}")
+    print(f"  Bigger:   {bigger}")
 
-    if TINYGRAD_AVAILABLE:
-        # Compare parameter counts
-        standard_params = sum(p.numel() for p in standard.parameters())
-        bigger_params = sum(p.numel() for p in bigger.parameters())
-        print(f"\nParameter count:")
-        print(f"  Standard: {standard_params:,}")
-        print(f"  Bigger:   {bigger_params:,}")
-        print(f"  Ratio:    {bigger_params / standard_params:.1f}x")
-
+    if TINYGRAD:
+        s_params = sum(p.numel() for p in standard.parameters())
+        b_params = sum(p.numel() for p in bigger.parameters())
+        print(f"  Params: {s_params:,} → {b_params:,} ({b_params / s_params:.1f}x)")
     print()
 
 
-def experiment_2_custom_activations():
-    """Experiment: What if we use different activations?"""
-    print("Experiment 2: Custom Activations")
+# -------------------------------------------------------------------
+# Experiment 2: GELU activations
+# -------------------------------------------------------------------
+
+def exp_gelu():
+    print("2. GELU Activations")
     print("-" * 40)
 
-    if not TINYGRAD_AVAILABLE:
-        print("(Requires tinygrad)")
-        print()
+    if not TINYGRAD:
+        print("  (requires tinygrad)\n")
         return
 
     class GELUPolicy(Policy):
-        """Policy with GELU activations instead of tanh."""
-
-        def __init__(self, obs_dim: int = 48, act_dim: int = 12):
+        def __init__(self, obs_dim=48, act_dim=12):
             self.l1 = Linear(obs_dim, 256)
             self.l2 = Linear(256, 256)
             self.l3 = Linear(256, act_dim)
@@ -77,150 +74,93 @@ def experiment_2_custom_activations():
         def forward(self, obs: Tensor) -> Tensor:
             x = self.l1(obs).gelu()
             x = self.l2(x).gelu()
-            return self.l3(x).tanh()  # Still bound output
+            return self.l3(x).tanh()
 
     policy = GELUPolicy()
-    print(f"GELU Policy: {policy}")
-
-    # Test inference
-    obs = Tensor.randn(1, 48)
-    action = policy(obs)
-    print(f"Input shape:  {obs.shape}")
-    print(f"Output shape: {action.shape}")
-    print(f"Output range: [{action.min().numpy():.3f}, {action.max().numpy():.3f}]")
+    action = policy(Tensor.randn(1, 48))
+    print(f"  Output: shape={action.shape}, range=[{action.min().numpy():.3f}, {action.max().numpy():.3f}]")
     print()
 
 
-def experiment_3_residual_connections():
-    """Experiment: What if we add residual connections?"""
-    print("Experiment 3: Residual Connections")
+# -------------------------------------------------------------------
+# Experiment 3: Residual connections
+# -------------------------------------------------------------------
+
+def exp_residual():
+    print("3. Residual Connections")
     print("-" * 40)
 
-    if not TINYGRAD_AVAILABLE:
-        print("(Requires tinygrad)")
-        print()
+    if not TINYGRAD:
+        print("  (requires tinygrad)\n")
         return
 
     class ResidualPolicy(Policy):
-        """Policy with residual connections for gradient flow."""
-
-        def __init__(self, obs_dim: int = 48, act_dim: int = 12, hidden: int = 256):
-            # Project obs to hidden dim
+        def __init__(self, obs_dim=48, act_dim=12, hidden=256):
             self.proj = Linear(obs_dim, hidden)
-
-            # Residual blocks
-            self.block1_l1 = Linear(hidden, hidden)
-            self.block1_l2 = Linear(hidden, hidden)
-
-            self.block2_l1 = Linear(hidden, hidden)
-            self.block2_l2 = Linear(hidden, hidden)
-
-            # Output projection
+            self.b1_l1, self.b1_l2 = Linear(hidden, hidden), Linear(hidden, hidden)
+            self.b2_l1, self.b2_l2 = Linear(hidden, hidden), Linear(hidden, hidden)
             self.out = Linear(hidden, act_dim)
 
-        def _residual_block(self, x: Tensor, l1: Linear, l2: Linear) -> Tensor:
-            """Residual block: x + f(x)"""
-            residual = x
-            x = l1(x).relu()
-            x = l2(x)
-            return (x + residual).relu()
+        def _block(self, x, l1, l2):
+            return (l2(l1(x).relu()) + x).relu()
 
         def forward(self, obs: Tensor) -> Tensor:
             x = self.proj(obs).relu()
-            x = self._residual_block(x, self.block1_l1, self.block1_l2)
-            x = self._residual_block(x, self.block2_l1, self.block2_l2)
+            x = self._block(x, self.b1_l1, self.b1_l2)
+            x = self._block(x, self.b2_l1, self.b2_l2)
             return self.out(x).tanh()
 
-    policy = ResidualPolicy()
-    print(f"Residual Policy with 2 residual blocks")
-
-    # Test inference
-    obs = Tensor.randn(1, 48)
-    action = policy(obs)
-    print(f"Output shape: {action.shape}")
+    action = ResidualPolicy()(Tensor.randn(1, 48))
+    print(f"  2 residual blocks → output shape={action.shape}")
     print()
 
 
-def experiment_4_attention():
-    """Experiment: What if we add self-attention?"""
-    print("Experiment 4: Self-Attention")
+# -------------------------------------------------------------------
+# Experiment 4: Self-attention over observation groups
+# -------------------------------------------------------------------
+
+def exp_attention():
+    print("4. Self-Attention")
     print("-" * 40)
 
-    if not TINYGRAD_AVAILABLE:
-        print("(Requires tinygrad)")
-        print()
+    if not TINYGRAD:
+        print("  (requires tinygrad)\n")
         return
 
     class AttentionPolicy(Policy):
-        """
-        Policy with self-attention over observation groups.
-
-        Treats the 48-dim observation as 12 groups of 4 features each,
-        then applies self-attention between groups.
-        """
+        """Treats 48-dim obs as 12 groups of 4, applies self-attention."""
 
         def __init__(self):
-            self.num_groups = 12
-            self.group_dim = 4
-            self.hidden_dim = 64
-
-            # Project each group to hidden dim
-            self.group_proj = Linear(self.group_dim, self.hidden_dim)
-
-            # Attention: Q, K, V projections
-            self.q_proj = Linear(self.hidden_dim, self.hidden_dim)
-            self.k_proj = Linear(self.hidden_dim, self.hidden_dim)
-            self.v_proj = Linear(self.hidden_dim, self.hidden_dim)
-
-            # Output MLP
-            self.out_l1 = Linear(self.hidden_dim * self.num_groups, 256)
-            self.out_l2 = Linear(256, 12)
+            self.num_groups, self.group_dim, self.hidden = 12, 4, 64
+            self.group_proj = Linear(self.group_dim, self.hidden)
+            self.q = Linear(self.hidden, self.hidden)
+            self.k = Linear(self.hidden, self.hidden)
+            self.v = Linear(self.hidden, self.hidden)
+            self.out1 = Linear(self.hidden * self.num_groups, 256)
+            self.out2 = Linear(256, 12)
 
         def forward(self, obs: Tensor) -> Tensor:
-            batch_size = obs.shape[0]
+            B = obs.shape[0]
+            x = self.group_proj(obs.reshape(B, self.num_groups, self.group_dim))
+            scores = (self.q(x) @ self.k(x).transpose(-2, -1)) / self.hidden**0.5
+            x = (scores.softmax(axis=-1) @ self.v(x)).reshape(B, -1)
+            return self.out2(self.out1(x).relu()).tanh()
 
-            # Reshape to groups: (batch, 12, 4)
-            x = obs.reshape(batch_size, self.num_groups, self.group_dim)
-
-            # Project groups: (batch, 12, hidden)
-            x = self.group_proj(x)
-
-            # Self-attention
-            q = self.q_proj(x)  # (batch, 12, hidden)
-            k = self.k_proj(x)
-            v = self.v_proj(x)
-
-            # Attention scores: (batch, 12, 12)
-            scale = self.hidden_dim**0.5
-            scores = (q @ k.transpose(-2, -1)) / scale
-            attn = scores.softmax(axis=-1)
-
-            # Apply attention
-            x = attn @ v  # (batch, 12, hidden)
-
-            # Flatten and output
-            x = x.reshape(batch_size, -1)  # (batch, 12*hidden)
-            x = self.out_l1(x).relu()
-            return self.out_l2(x).tanh()
-
-    policy = AttentionPolicy()
-    print(f"Attention Policy (12 groups x 4 features)")
-
-    # Test inference
-    obs = Tensor.randn(1, 48)
-    action = policy(obs)
-    print(f"Output shape: {action.shape}")
+    action = AttentionPolicy()(Tensor.randn(1, 48))
+    print(f"  12 groups x 4 features → output shape={action.shape}")
     print()
 
 
-def experiment_5_jit_comparison():
-    """Experiment: JIT compilation speedup"""
-    print("Experiment 5: JIT Compilation Speedup")
+# -------------------------------------------------------------------
+# Experiment 5: JIT compilation speedup
+# -------------------------------------------------------------------
+
+def exp_jit():
+    print("5. JIT Compilation")
     print("-" * 40)
 
-    if not TINYGRAD_AVAILABLE:
-        print("(Requires tinygrad)")
-        print()
+    if not TINYGRAD:
+        print("  (requires tinygrad)\n")
         return
 
     import time
@@ -228,52 +168,37 @@ def experiment_5_jit_comparison():
 
     policy = go2_mlp()
     jit_policy = JitPolicy(policy)
+    obs = Tensor.randn(1, 48)
 
     # Warmup
-    obs = Tensor.randn(1, 48)
     _ = policy(obs)
     _ = jit_policy(obs)
 
-    # Benchmark non-JIT
-    n_iters = 100
-    start = time.perf_counter()
-    for _ in range(n_iters):
+    N = 100
+    t0 = time.perf_counter()
+    for _ in range(N):
         _ = policy(obs)
-    non_jit_time = (time.perf_counter() - start) / n_iters * 1000
+    base_ms = (time.perf_counter() - t0) / N * 1000
 
-    # Benchmark JIT (first call compiles)
-    _ = jit_policy(obs)
-
-    start = time.perf_counter()
-    for _ in range(n_iters):
+    _ = jit_policy(obs)  # compile
+    t0 = time.perf_counter()
+    for _ in range(N):
         _ = jit_policy(obs)
-    jit_time = (time.perf_counter() - start) / n_iters * 1000
+    jit_ms = (time.perf_counter() - t0) / N * 1000
 
-    print(f"Non-JIT: {non_jit_time:.3f} ms/inference")
-    print(f"JIT:     {jit_time:.3f} ms/inference")
-    print(f"Speedup: {non_jit_time / jit_time:.1f}x")
+    print(f"  Base: {base_ms:.3f} ms/call")
+    print(f"  JIT:  {jit_ms:.3f} ms/call  ({base_ms / jit_ms:.1f}x speedup)")
     print()
 
 
-def main():
-    print("Pi Quick Experiments")
-    print("=" * 50)
-    print("These examples show how easy it is to experiment")
-    print("with different architectures using tinygrad.\n")
-
-    experiment_1_bigger_network()
-    experiment_2_custom_activations()
-    experiment_3_residual_connections()
-    experiment_4_attention()
-    experiment_5_jit_comparison()
-
-    print("=" * 50)
-    print("All experiments complete!")
-    print("\nThe tinygrad approach makes it trivial to:")
-    print("  - Try new architectures (just write Python)")
-    print("  - Debug with print statements")
-    print("  - Deploy with @TinyJit for speed")
-
-
 if __name__ == "__main__":
-    main()
+    print("rfx Architecture Experiments")
+    print("=" * 50)
+    print()
+    exp_bigger_network()
+    exp_gelu()
+    exp_residual()
+    exp_attention()
+    exp_jit()
+    print("=" * 50)
+    print("Done!")

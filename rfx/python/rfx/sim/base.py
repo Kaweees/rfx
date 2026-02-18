@@ -90,6 +90,16 @@ class SimRobot(RobotBase):
     def get_done(self) -> "torch.Tensor":
         return self._backend.get_done()
 
+    def render(self) -> None:
+        render_fn = getattr(self._backend, "render", None)
+        if callable(render_fn):
+            render_fn()
+
+    def close(self) -> None:
+        close_fn = getattr(self._backend, "close", None)
+        if callable(close_fn):
+            close_fn()
+
     @classmethod
     def from_config(
         cls,

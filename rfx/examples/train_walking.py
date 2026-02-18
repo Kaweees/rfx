@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 """
-Train a walking policy using PPO and tinygrad
+Train a Go2 walking policy with PPO (tinygrad).
 
-This example demonstrates the complete training loop for a Go2 locomotion policy:
-1. Create environment and policy
-2. Collect rollouts
-3. Update policy with PPO
-4. Save trained model
+Uses the rfx v1 RL stack — tinygrad-based networks, PPO trainer, and
+the Go2Env gym-style environment.
+
+Key concepts:
+    rfx.nn.go2_actor_critic — creates an ActorCritic MLP for Go2
+    rfx.rl.PPOTrainer       — standard PPO with GAE
+    rfx.rl.collect_rollout  — fills a buffer with env transitions
+    rfx.envs.Go2Env         — Go2 with gym reset()/step() interface
 
 Usage:
-    python examples/train_walking.py
+    uv run rfx/examples/train_walking.py
 
 Requirements:
     pip install tinygrad
@@ -22,20 +25,24 @@ from rfx.envs import Go2Env
 
 
 def main():
-    print("Pi Walking Policy Training")
-    print("=" * 50)
-
-    # Create environment (simulation mode)
+    # -------------------------------------------------------------------
+    # 1. Create environment
+    # -------------------------------------------------------------------
     env = Go2Env(sim=True)
-    print(f"Environment: Go2Env (sim=True)")
-    print(f"  Observation space: {env.observation_space.shape}")
-    print(f"  Action space: {env.action_space.shape}")
+    print(f"Env:  obs={env.observation_space.shape}, act={env.action_space.shape}")
 
-    # Create policy (ActorCritic for PPO)
+    # -------------------------------------------------------------------
+    # 2. Create policy
+    #
+    # go2_actor_critic() returns an ActorCritic module with separate
+    # actor (policy) and critic (value) heads.
+    # -------------------------------------------------------------------
     policy = go2_actor_critic(hidden=[256, 256])
-    print(f"\nPolicy: {policy}")
+    print(f"Policy: {policy}")
 
-    # Create trainer
+    # -------------------------------------------------------------------
+    # 3. Create PPO trainer
+    # -------------------------------------------------------------------
     trainer = PPOTrainer(
         policy,
         lr=3e-4,
@@ -45,49 +52,45 @@ def main():
         update_epochs=10,
         minibatch_size=64,
     )
-    print(f"Trainer: PPO (lr=3e-4)")
 
-    # Training loop
+    # -------------------------------------------------------------------
+    # 4. Training loop
+    #
+    # Each epoch: collect a rollout of 2048 steps, then run PPO updates.
+    # -------------------------------------------------------------------
     num_epochs = 100
     steps_per_epoch = 2048
-
-    print(f"\nTraining for {num_epochs} epochs, {steps_per_epoch} steps each...")
-    print("-" * 50)
-
     best_reward = float("-inf")
 
-    for epoch in range(num_epochs):
-        # Collect rollout
-        rollout = collect_rollout(env, policy, steps=steps_per_epoch)
+    print(f"\nTraining: {num_epochs} epochs x {steps_per_epoch} steps")
+    print("-" * 60)
 
-        # Update policy
+    for epoch in range(num_epochs):
+        rollout = collect_rollout(env, policy, steps=steps_per_epoch)
         metrics = trainer.update(rollout)
 
-        # Print progress
         mean_reward = metrics["mean_reward"]
         total_reward = metrics["total_reward"]
-        policy_loss = metrics["policy_loss"]
-        value_loss = metrics["value_loss"]
 
         print(
             f"Epoch {epoch:3d} | "
-            f"Reward: {mean_reward:7.3f} (total: {total_reward:8.1f}) | "
-            f"Policy Loss: {policy_loss:7.4f} | "
-            f"Value Loss: {value_loss:7.4f}"
+            f"reward={mean_reward:7.3f} (total={total_reward:8.1f}) | "
+            f"pi_loss={metrics['policy_loss']:7.4f} | "
+            f"v_loss={metrics['value_loss']:7.4f}"
         )
 
-        # Save best model
         if total_reward > best_reward:
             best_reward = total_reward
             policy.save("walking_policy_best.safetensors")
 
-    # Save final model
+    # -------------------------------------------------------------------
+    # 5. Save
+    # -------------------------------------------------------------------
     policy.save("walking_policy.safetensors")
-    print("-" * 50)
-    print(f"\nTraining complete!")
-    print(f"  Best reward: {best_reward:.2f}")
-    print(f"  Model saved to: walking_policy.safetensors")
-    print(f"  Best model saved to: walking_policy_best.safetensors")
+    print("-" * 60)
+    print(f"Done — best reward: {best_reward:.2f}")
+    print(f"  walking_policy.safetensors       (final)")
+    print(f"  walking_policy_best.safetensors   (best)")
 
 
 if __name__ == "__main__":

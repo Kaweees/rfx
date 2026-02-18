@@ -3,6 +3,7 @@
 Top-level layout:
 
 - `rfx/`: production and test source code
+- `packages/`: extension Python packages (`rfx-sdk-sim`, `rfx-sdk-go2`, `rfx-sdk-lerobot`)
 - `docs/`: architecture, workflows, and contributor guides
   includes perf baselines in `docs/perf/baselines/`
 - `rfxJIT/`: ultra-performance kernel and compiler engine

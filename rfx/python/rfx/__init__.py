@@ -90,6 +90,7 @@ except ImportError:
 from .robot import Robot, RobotBase
 from .config import RobotConfig, CameraConfig, JointConfig, load_config
 from .observation import ObservationSpec, make_observation, unpad_action
+from .session import Session, SessionStats, run
 from . import utils
 from . import jit
 
@@ -161,6 +162,13 @@ except ModuleNotFoundError:
 from .skills import skill, Skill, SkillRegistry
 from .agent import Agent
 from .decorators import control_loop, policy, MotorCommands
+from .sdk import connect as connect_robot, UniversalRobot, VelocityCommand
+from .providers import (
+    use,
+    available_providers,
+    require as require_provider,
+    enabled as provider_enabled,
+)
 
 try:
     from . import nn
@@ -185,6 +193,9 @@ __all__ = [
     "ObservationSpec",
     "make_observation",
     "unpad_action",
+    "Session",
+    "SessionStats",
+    "run",
     "sim",
     "real",
     "utils",
@@ -245,4 +256,11 @@ __all__ = [
     "Skill",
     "SkillRegistry",
     "Agent",
+    "connect_robot",
+    "UniversalRobot",
+    "VelocityCommand",
+    "use",
+    "available_providers",
+    "require_provider",
+    "provider_enabled",
 ]

@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rfx-sdk-sim"
+version = "0.1.1"
+description = "Simulation adapters and controllers for rfx"
+requires-python = ">=3.13"
+dependencies = ["rfx-sdk>=0.1.1"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

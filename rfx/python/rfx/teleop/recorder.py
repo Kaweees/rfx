@@ -248,6 +248,22 @@ class LeRobotRecorder:
         writer = LeRobotPackageWriter(config)
         return writer.write_episode(episode, task=task)
 
+    def export_episode_to_mcap(
+        self,
+        episode: RecordedEpisode,
+        *,
+        output_dir: str | Path = Path("mcap_exports"),
+        include_camera_frames: bool = True,
+    ) -> dict[str, Any]:
+        from .mcap_writer import McapEpisodeWriter, McapExportConfig
+
+        config = McapExportConfig(
+            output_dir=output_dir,
+            include_camera_frames=include_camera_frames,
+        )
+        writer = McapEpisodeWriter(config)
+        return writer.write_episode(episode)
+
     def close(self) -> None:
         with self._lock:
             if self._active_episode_id is None:

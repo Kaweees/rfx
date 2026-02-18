@@ -6,7 +6,7 @@ cd "$ROOT"
 
 usage() {
   cat <<'USAGE'
-Usage: cli/rfx.sh <doctor|doctor-teleop|bootstrap|bootstrap-teleop|setup-source|check>
+Usage: cli/rfx.sh <doctor|doctor-teleop|doctor-so101|so101-demo|so101-bimanual|bootstrap|bootstrap-teleop|setup-source|check|pkg-create|pkg-list|run|launch|graph|topic-list>
 USAGE
 }
 
@@ -42,14 +42,30 @@ doctor_teleop() {
   bash scripts/doctor-teleop.sh
 }
 
+doctor_so101() {
+  bash scripts/doctor-so101.sh
+}
+
 check() {
   cargo fmt --all -- --check
   cargo clippy --workspace --all-targets --all-features -- -D warnings
   scripts/python-checks.sh ci
 }
 
+runtime_cli() {
+  uv run --python 3.13 python -m rfx.runtime.cli "$@"
+}
+
+so101_demo() {
+  uv run --python 3.13 rfx/examples/so101_quickstart.py "$@"
+}
+
+so101_bimanual() {
+  uv run --python 3.13 rfx/examples/teleop_record.py --config rfx/configs/so101_bimanual.yaml "$@"
+}
+
 main() {
-  if [[ $# -ne 1 ]]; then
+  if [[ $# -lt 1 ]]; then
     usage
     exit 1
   fi
@@ -60,6 +76,18 @@ main() {
       ;;
     doctor-teleop)
       doctor_teleop
+      ;;
+    doctor-so101)
+      shift
+      doctor_so101 "$@"
+      ;;
+    so101-demo)
+      shift
+      so101_demo "$@"
+      ;;
+    so101-bimanual)
+      shift
+      so101_bimanual "$@"
       ;;
     bootstrap)
       bootstrap
@@ -72,6 +100,30 @@ main() {
       ;;
     check)
       check
+      ;;
+    pkg-create)
+      shift
+      runtime_cli pkg-create "$@"
+      ;;
+    pkg-list)
+      shift
+      runtime_cli pkg-list "$@"
+      ;;
+    run)
+      shift
+      runtime_cli run "$@"
+      ;;
+    launch)
+      shift
+      runtime_cli launch "$@"
+      ;;
+    graph)
+      shift
+      runtime_cli graph "$@"
+      ;;
+    topic-list)
+      shift
+      runtime_cli topic-list "$@"
       ;;
     *)
       usage

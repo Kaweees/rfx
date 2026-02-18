@@ -12,7 +12,7 @@ rfx: A ground-up replacement for ROS, built for the foundation model era.
 
 [![CI](https://github.com/quantbagel/rfx/actions/workflows/ci.yml/badge.svg)](https://github.com/quantbagel/rfx/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.13%2B-blue.svg)](https://www.python.org/downloads/)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Chat-5865F2?logo=discord&logoColor=white)](https://discord.gg/xV8bAGM8WT)
 
 </div>
@@ -103,6 +103,13 @@ bash scripts/setup-from-source.sh
 uv pip install git+https://github.com/quantbagel/rfx.git
 ```
 
+### PyPI (after release)
+
+```bash
+uv pip install rfx-sdk
+uv pip install rfx-sdk-sim rfx-sdk-go2 rfx-sdk-lerobot
+```
+
 ### Direct (local path)
 
 ```bash
@@ -141,6 +148,7 @@ bash scripts/perf-check.sh \
 
 - Full documentation: [deepwiki.com/quantbagel/rfx](https://deepwiki.com/quantbagel/rfx)
 - Docs entrypoint: `docs/README.md`
+- SO101 quickstart: `docs/so101.md`
 - Contributor workflow: `docs/workflow.md`
 - Performance workflow: `docs/perf/README.md`
 - Contributing guide: `CONTRIBUTING.md`

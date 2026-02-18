@@ -1,0 +1,21 @@
+rate_hz: 350.0
+output_dir: demos
+
+arm_pairs:
+  - name: left
+    leader_port: /dev/ttyACM0
+    follower_port: /dev/ttyACM1
+  - name: right
+    leader_port: /dev/ttyACM2
+    follower_port: /dev/ttyACM3
+
+cameras:
+  - name: cam0
+    device_id: 0
+    fps: 30
+  - name: cam1
+    device_id: 1
+    fps: 30
+  - name: cam2
+    device_id: 2
+    fps: 30

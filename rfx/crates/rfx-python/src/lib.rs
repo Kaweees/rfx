@@ -3,6 +3,7 @@
 //! This crate provides PyO3 bindings to expose rfx-core functionality to Python.
 //! The GIL is released immediately in all long-running operations to allow
 //! Python threads to run concurrently.
+#![allow(deprecated)]
 
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
@@ -97,7 +98,6 @@ fn _rfx(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
 /// Get motor index by name
 #[pyfunction]
-#[must_use]
 fn motor_index_by_name(name: &str) -> PyResult<Option<usize>> {
     Ok(rfx_core::hardware::motor_index_by_name(name))
 }

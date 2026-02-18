@@ -1,121 +1,90 @@
 #!/usr/bin/env python3
 """
-Neural Policy Example (v2)
+Run a simple proportional controller on the Rust-backed mock sim.
 
-Demonstrates how to use neural network policies with rfx.
-This example uses the mock simulation backend for testing.
+This example uses the rfx v1 Rust simulation API directly — SimConfig,
+MockSimBackend, PhysicsConfig — to step a physics sim and apply a
+proportional controller to drive joints to a target position.
 
-For real ONNX model inference, see examples/onnx_policy.py (requires onnxruntime).
+Key concepts:
+    rfx.SimConfig        — simulation backend selector (mock, isaac, genesis, mujoco)
+    rfx.MockSimBackend   — Rust-backed mock physics (12 joints)
+    rfx.PhysicsConfig    — timestep, substeps, solver settings
+
+Usage:
+    uv run rfx/examples/neural_policy.py
 """
 
 import rfx
-import time
-import numpy as np
 
 
 def main():
-    print("pi Neural Policy Example (v2)")
-    print("=" * 50)
-
-    # Create a mock simulation backend
+    # -------------------------------------------------------------------
+    # 1. Create a Rust-backed mock simulation
+    #
+    # SimConfig.mock() selects the mock backend. Pass it to
+    # MockSimBackend to get a lightweight 12-joint sim with no external
+    # physics engine required.
+    # -------------------------------------------------------------------
     config = rfx.SimConfig.mock()
     sim = rfx.MockSimBackend(config)
 
-    print(f"Simulation backend: {sim.name()}")
+    print(f"Backend: {sim.name()}")
     print(f"Initial time: {sim.sim_time():.3f}s")
 
-    # Reset simulation
     state = sim.reset()
-    print(f"\nAfter reset: {state}")
 
-    # Simple policy: move joints towards a target position
-    target_positions = [0.5] * 12  # Target position for all joints
+    # -------------------------------------------------------------------
+    # 2. Proportional controller
+    #
+    # Read joint positions from state, compute error to target, apply
+    # a simple P-gain. This is the simplest possible "policy".
+    # -------------------------------------------------------------------
+    target_positions = [0.5] * 12
+    kp = 0.5
 
-    print("\nRunning simulation with simple policy...")
-    print("Target joint position: 0.5 rad")
-    print()
+    print(f"\nDriving all joints to 0.5 rad with kp={kp}...")
 
-    # Run for 500 steps
     for step in range(500):
-        # Get current state
-        current_positions = state.joint_positions()
+        current = state.joint_positions()
+        actions = [kp * (t - c) for t, c in zip(target_positions, current)]
 
-        # Simple proportional controller
-        kp = 0.5
-        actions = [
-            kp * (target - current) for target, current in zip(target_positions, current_positions)
-        ]
-
-        # Step simulation
         state, done = sim.step(actions)
 
-        # Print every 100 steps
         if step % 100 == 0:
-            print(
-                f"Step {step:4d} | Time: {state.sim_time():.3f}s | "
-                f"Joint[0]: {current_positions[0]:.4f} rad"
-            )
+            print(f"  step={step:4d}  t={state.sim_time():.3f}s  joint[0]={current[0]:.4f} rad")
 
         if done:
             print("Episode terminated!")
             break
 
-    # Final state
-    final_positions = state.joint_positions()
-    print(f"\nFinal joint positions:")
-    for i, pos in enumerate(final_positions):
-        print(f"  Joint {i:2d}: {pos:.4f} rad (target: 0.5)")
-
-    print("\n" + "=" * 50)
-    print("Example complete!")
-
-
-def demo_physics_config():
-    """Demonstrate different physics configurations."""
-    print("\nPhysics Configuration Examples:")
-    print("-" * 40)
-
-    # Default config
-    default = rfx.PhysicsConfig()
-    print(f"Default: {default}")
-
-    # Fast config (for rapid prototyping)
-    fast = rfx.PhysicsConfig.fast()
-    print(f"Fast:    dt={fast.dt}, substeps={fast.substeps}")
-
-    # Accurate config (for precise simulation)
-    accurate = rfx.PhysicsConfig.accurate()
-    print(f"Accurate: dt={accurate.dt}, substeps={accurate.substeps}")
+    # -------------------------------------------------------------------
+    # 3. Results
+    # -------------------------------------------------------------------
+    final = state.joint_positions()
+    print(f"\nFinal positions (target=0.5):")
+    for i, pos in enumerate(final):
+        print(f"  joint {i:2d}: {pos:.4f} rad")
 
 
-def demo_sim_backends():
-    """Demonstrate different simulation backend configurations."""
-    print("\nSimulation Backend Configurations:")
-    print("-" * 40)
+def show_configs():
+    """Show available physics and sim backend configurations."""
+    print("Physics configs:")
+    for name, factory in [("default", rfx.PhysicsConfig), ("fast", rfx.PhysicsConfig.fast), ("accurate", rfx.PhysicsConfig.accurate)]:
+        cfg = factory() if callable(factory) else factory
+        if hasattr(cfg, 'dt'):
+            print(f"  {name:10s}  dt={cfg.dt}  substeps={cfg.substeps}")
 
-    # Mock (for testing)
-    mock_cfg = rfx.SimConfig.mock()
-    print(f"Mock:      backend='{mock_cfg.backend}'")
+    print("\nSim backends:")
+    for name, factory in [("mock", rfx.SimConfig.mock), ("genesis", rfx.SimConfig.genesis), ("mujoco", rfx.SimConfig.mujoco)]:
+        cfg = factory()
+        print(f"  {name:10s}  backend='{cfg.backend}'")
 
-    # Isaac Sim (placeholder)
-    isaac_cfg = rfx.SimConfig.isaac_sim()
-    print(f"Isaac Sim: backend='{isaac_cfg.backend}'")
-
-    # Genesis (placeholder)
-    genesis_cfg = rfx.SimConfig.genesis()
-    print(f"Genesis:   backend='{genesis_cfg.backend}'")
-
-    # MuJoCo (placeholder)
-    mujoco_cfg = rfx.SimConfig.mujoco()
-    print(f"MuJoCo:    backend='{mujoco_cfg.backend}'")
-
-    # Parallel environments
-    parallel_cfg = rfx.SimConfig.mock().with_num_envs(4096)
-    print(f"Parallel:  num_envs={parallel_cfg.num_envs}")
+    parallel = rfx.SimConfig.mock().with_num_envs(4096)
+    print(f"\n  Parallel envs: num_envs={parallel.num_envs}")
 
 
 if __name__ == "__main__":
-    demo_physics_config()
-    demo_sim_backends()
+    show_configs()
     print()
     main()

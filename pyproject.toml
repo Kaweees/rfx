@@ -3,13 +3,13 @@ requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "rfx"
-version = "0.1.0"
+name = "rfx-sdk"
+version = "0.1.1"
 description = "A tinygrad-inspired robotics framework for Unitree Go2"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "rfx contributors" }]
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -17,17 +17,18 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Programming Language :: Rust",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "Topic :: Scientific/Engineering :: Robotics",
 ]
 keywords = ["robotics", "unitree", "go2", "quadruped", "control"]
 
 # Core dependencies
 dependencies = [
     "tinygrad>=0.9.0",
-    "numpy>=1.24",
+    "numpy>=1.24,<2.4",
+    "PyYAML>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -40,6 +41,7 @@ agent = [
 teleop = [
     "opencv-python>=4.8",
     "torch>=2.2",
+    "mcap>=1.1.0",
 ]
 # Direct LeRobot package export support
 teleop-lerobot = [
@@ -55,10 +57,10 @@ dev = [
 ]
 # All optional dependencies
 all = [
-    "rfx[agent]",
-    "rfx[teleop]",
-    "rfx[teleop-lerobot]",
-    "rfx[dev]",
+    "rfx-sdk[agent]",
+    "rfx-sdk[teleop]",
+    "rfx-sdk[teleop-lerobot]",
+    "rfx-sdk[dev]",
 ]
 
 [project.urls]
@@ -72,6 +74,8 @@ Issues = "https://github.com/quantbagel/rfx/issues"
 manifest-path = "rfx/crates/rfx-python/Cargo.toml"
 # Include Python source files
 python-source = "rfx/python"
+# Ensure LICENSE is present in core source distribution.
+include = [{ path = "LICENSE", format = "sdist" }]
 # Module name
 module-name = "rfx._rfx"
 # Features
@@ -81,7 +85,7 @@ strip = true
 
 [tool.ruff]
 line-length = 100
-target-version = "py314"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = [
@@ -102,7 +106,7 @@ ignore = [
 known-first-party = ["rfx"]
 
 [tool.mypy]
-python_version = "3.14"
+python_version = "3.13"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
