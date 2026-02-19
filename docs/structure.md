@@ -2,7 +2,7 @@
 
 Top-level layout:
 
-- `rfx/`: production and test source code
+- `rfx/`: production and test source code (includes `python/rfx/hub.py` for model management and `python/rfx/nn.py` for policy definitions)
 - `packages/`: extension Python packages (`rfx-sdk-sim`, `rfx-sdk-go2`, `rfx-sdk-lerobot`)
 - `docs/`: architecture, workflows, and contributor guides
   includes perf baselines in `docs/perf/baselines/`

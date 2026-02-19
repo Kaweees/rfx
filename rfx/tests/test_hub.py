@@ -187,8 +187,8 @@ def test_normalizer_json_serializable():
 # ---------------------------------------------------------------------------
 
 
-def test_loaded_policy_callable(tmp_path):
-    """LoadedPolicy.__call__ passes through to policy."""
+def test_loaded_policy_callable_tinygrad(tmp_path):
+    """LoadedPolicy.__call__ with raw tinygrad tensor (direct usage)."""
     policy = MLP(obs_dim=4, act_dim=2, hidden=[8])
     policy.save(tmp_path / "callable-test")
 
@@ -198,8 +198,66 @@ def test_loaded_policy_callable(tmp_path):
     assert result.numpy().shape == (1, 2)
 
 
+def test_loaded_policy_callable_torch_dict(tmp_path):
+    """LoadedPolicy.__call__ with torch obs dict (Session / robot.observe() path)."""
+    policy = MLP(obs_dim=4, act_dim=2, hidden=[8])
+    policy.save(tmp_path / "bridge-test")
+
+    loaded = load_policy(tmp_path / "bridge-test")
+    obs_dict = {"state": torch.randn(1, 4)}
+    result = loaded(obs_dict)
+
+    # Result should be a torch.Tensor, not tinygrad
+    assert isinstance(result, torch.Tensor)
+    assert result.shape == (1, 2)
+
+
+def test_loaded_policy_bridge_with_normalizer(tmp_path):
+    """Full bridge: torch dict → normalize → tinygrad policy → torch action."""
+    policy = MLP(obs_dim=4, act_dim=2, hidden=[8])
+    norm = ObservationNormalizer(state_dim=4)
+    norm.update(torch.randn(50, 4))
+
+    policy.save(tmp_path / "bridge-norm", normalizer=norm)
+    loaded = load_policy(tmp_path / "bridge-norm")
+
+    obs_dict = {"state": torch.randn(1, 4)}
+    result = loaded(obs_dict)
+
+    assert isinstance(result, torch.Tensor)
+    assert result.shape == (1, 2)
+
+
 # ---------------------------------------------------------------------------
-# 8. Directory format
+# 8. JitPolicy save/load
+# ---------------------------------------------------------------------------
+
+
+def test_jit_policy_save_load(tmp_path):
+    """JitPolicy.save() saves the inner policy; JitPolicy.load() re-wraps with JIT."""
+    from rfx.nn import JitPolicy
+
+    mlp = MLP(obs_dim=4, act_dim=2, hidden=[8])
+    jit_policy = JitPolicy(mlp)
+    obs = Tensor.randn(1, 4)
+    expected = jit_policy(obs).numpy()
+
+    jit_policy.save(tmp_path / "jit-test")
+
+    # Config should reflect the inner MLP, not JitPolicy
+    config = inspect_policy(tmp_path / "jit-test")
+    assert config["policy_type"] == "MLP"
+
+    # Load back as JitPolicy
+    loaded = JitPolicy.load(tmp_path / "jit-test")
+    assert isinstance(loaded, JitPolicy)
+    actual = loaded(obs).numpy()
+    assert actual.shape == expected.shape
+    assert abs(actual - expected).max() < 1e-5
+
+
+# ---------------------------------------------------------------------------
+# 9. Directory format
 # ---------------------------------------------------------------------------
 
 

@@ -201,7 +201,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip install pytest pytest-cov maturin
+          pip install pytest pytest-asyncio pytest-cov maturin
 
       - name: Build and install package
         run: |
@@ -210,7 +210,8 @@ jobs:
 
       - name: Run Python tests
         run: |
-          pytest rfx/tests/ rfxJIT/tests/ -v --cov=rfx --cov-report=xml --cov-report=term-missing
+          PYTHONPATH="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/rfx/python:${PYTHONPATH}" \
+            pytest rfx/tests/ rfxJIT/tests/ -v --cov=rfx --cov-report=xml --cov-report=term-missing
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.14'
@@ -258,7 +259,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pytest maturin
+          pip install pytest pytest-asyncio maturin
 
       - name: Build package
         run: |
@@ -266,7 +267,9 @@ jobs:
           pip install --force-reinstall target/wheels/*.whl
 
       - name: Run integration tests
-        run: pytest rfx/tests/integration/ -v
+        run: |
+          PYTHONPATH="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/rfx/python:${PYTHONPATH}" \
+            pytest rfx/tests/integration/ -v
 
   # ===========================================================================
   # rfxJIT Perf (warning-only gate)

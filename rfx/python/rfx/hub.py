@@ -97,7 +97,12 @@ def _resolve_source(source: str | Path) -> Path:
 
 @dataclass
 class LoadedPolicy:
-    """A loaded policy with all its metadata. Callable — passes through to policy."""
+    """A loaded policy with all its metadata.
+
+    Callable — accepts the obs dict that ``robot.observe()`` returns and
+    handles torch↔tinygrad conversion automatically so it plugs straight
+    into ``rfx.run(robot, loaded_policy)``.
+    """
 
     policy: Any  # Policy
     robot_config: Any  # RobotConfig | None
@@ -105,9 +110,37 @@ class LoadedPolicy:
     config: dict[str, Any]
 
     def __call__(self, obs):
-        if self.normalizer is not None:
-            obs = self.normalizer.normalize(obs)
+        # When called from rfx.run() / Session, obs is dict[str, torch.Tensor].
+        # Normalizer works on torch dicts, so run it before conversion.
+        if isinstance(obs, dict):
+            if self.normalizer is not None:
+                obs = self.normalizer.normalize(obs)
+            obs = self._dict_to_tinygrad(obs)
+            action = self.policy(obs)
+            return self._tinygrad_to_torch(action)
+
+        # Raw tinygrad tensor passed directly — no conversion needed.
         return self.policy(obs)
+
+    # ------------------------------------------------------------------
+    # torch ↔ tinygrad helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _dict_to_tinygrad(obs: dict) -> Any:
+        """Extract 'state' tensor from obs dict, convert torch → tinygrad."""
+        from tinygrad import Tensor as TinyTensor
+
+        state = obs["state"]
+        # torch.Tensor → numpy → tinygrad.Tensor
+        return TinyTensor(state.numpy())
+
+    @staticmethod
+    def _tinygrad_to_torch(t: Any) -> Any:
+        """Convert tinygrad.Tensor → torch.Tensor."""
+        import torch
+
+        return torch.from_numpy(t.numpy())
 
     @property
     def policy_type(self) -> str:

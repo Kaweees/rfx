@@ -96,9 +96,7 @@ class Policy:
 
     def config_dict(self) -> dict[str, Any]:
         """Return constructor arguments needed to recreate this policy."""
-        raise NotImplementedError(
-            f"{type(self).__name__} must implement config_dict() for saving"
-        )
+        raise NotImplementedError(f"{type(self).__name__} must implement config_dict() for saving")
 
     @classmethod
     def from_config_dict(cls, d: dict[str, Any]) -> Policy:
@@ -262,6 +260,9 @@ class JitPolicy(Policy):
     Wraps any policy and JIT compiles its forward pass for faster inference.
     The first call traces the computation graph, subsequent calls are fast.
 
+    Save/load delegates to the inner policy -- JIT compilation state is
+    re-created on load automatically.
+
     Args:
         policy: The policy to wrap
 
@@ -285,6 +286,20 @@ class JitPolicy(Policy):
         )
         self._jit_forward = self._jit_runtime
         self._rfx_jit_backend = self._jit_runtime.backend
+
+    def config_dict(self) -> dict[str, Any]:
+        """Delegate to the inner policy's config_dict."""
+        return self._policy.config_dict()
+
+    def save(self, path, **kwargs) -> Path:
+        """Save the inner policy (JIT state is re-created on load)."""
+        return self._policy.save(path, **kwargs)
+
+    @classmethod
+    def load(cls, path: str | Path) -> Policy:
+        """Load the inner policy and wrap it with JIT compilation."""
+        inner = Policy.load(path)
+        return cls(inner)
 
     def forward(self, obs: Tensor) -> Tensor:
         return self._jit_forward(obs)
