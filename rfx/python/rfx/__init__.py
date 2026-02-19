@@ -90,6 +90,7 @@ except ImportError:
 from .robot import Robot, RobotBase
 from .config import RobotConfig, CameraConfig, JointConfig, load_config
 from .observation import ObservationSpec, make_observation, unpad_action
+from .urdf import URDF
 from .session import Session, SessionStats, run
 from . import utils
 from . import jit
@@ -181,6 +182,7 @@ except ModuleNotFoundError:
 
 __all__ = [
     # v2 API
+    "URDF",
     "Robot",
     "RobotBase",
     "SimRobot",
