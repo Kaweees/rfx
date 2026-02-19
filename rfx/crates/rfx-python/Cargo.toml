@@ -18,3 +18,4 @@ tracing-subscriber.workspace = true
 [features]
 default = []
 extension-module = ["pyo3/extension-module"]
+zenoh = ["rfx-core/zenoh"]

@@ -51,6 +51,11 @@ pub struct TransportSubscription {
 }
 
 impl TransportSubscription {
+    /// Construct a new subscription handle from its parts.
+    pub(crate) fn new(id: u64, pattern: Arc<str>, rx: cc::Receiver<TransportEnvelope>) -> Self {
+        Self { id, pattern, rx }
+    }
+
     /// Unique subscription id.
     #[inline]
     pub fn id(&self) -> u64 {

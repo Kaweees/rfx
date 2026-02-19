@@ -612,6 +612,31 @@ impl PyGo2Config {
         }
     }
 
+    /// Set the Zenoh router endpoint (e.g. "tcp/192.168.123.161:7447")
+    fn with_zenoh_router(&self, endpoint: &str) -> Self {
+        Self {
+            inner: self.inner.clone().with_zenoh_endpoint(endpoint),
+        }
+    }
+
+    /// Set the preferred DDS backend ("zenoh", "cyclone", or "dust")
+    fn with_backend(&self, backend: &str) -> PyResult<Self> {
+        let hint = match backend {
+            "zenoh" => rfx_core::hardware::go2::Go2BackendHint::Zenoh,
+            "cyclone" => rfx_core::hardware::go2::Go2BackendHint::CycloneDds,
+            "dust" => rfx_core::hardware::go2::Go2BackendHint::DustDds,
+            other => {
+                return Err(PyValueError::new_err(format!(
+                    "Unknown backend '{}'. Expected 'zenoh', 'cyclone', or 'dust'",
+                    other
+                )))
+            }
+        };
+        Ok(Self {
+            inner: self.inner.clone().with_backend(hint),
+        })
+    }
+
     #[getter]
     #[inline]
     fn ip_address(&self) -> &str {
@@ -1720,10 +1745,10 @@ impl PyTransportSubscription {
     }
 }
 
-/// In-process keyed transport backend.
+/// Keyed transport backend (in-process or Zenoh).
 #[pyclass(name = "Transport")]
 pub struct PyTransport {
-    inner: Arc<rfx_core::comm::InprocTransport>,
+    inner: Arc<dyn rfx_core::comm::TransportBackend>,
 }
 
 #[pymethods]
@@ -1735,6 +1760,35 @@ impl PyTransport {
         }
     }
 
+    /// Create a Zenoh-backed transport.
+    #[staticmethod]
+    #[cfg(feature = "zenoh")]
+    #[pyo3(signature = (connect = vec![], listen = vec![], shared_memory = true, key_prefix = String::new()))]
+    fn zenoh(
+        connect: Vec<String>,
+        listen: Vec<String>,
+        shared_memory: bool,
+        key_prefix: String,
+    ) -> PyResult<Self> {
+        let config = rfx_core::comm::ZenohTransportConfig {
+            connect,
+            listen,
+            shared_memory,
+            key_prefix,
+        };
+        let transport = rfx_core::comm::ZenohTransport::new(config)
+            .map_err(|e| PyRuntimeError::new_err(format!("failed to create zenoh transport: {e}")))?;
+        Ok(Self {
+            inner: Arc::new(transport),
+        })
+    }
+
+    /// Return whether Zenoh transport support is compiled in.
+    #[staticmethod]
+    fn zenoh_available() -> bool {
+        cfg!(feature = "zenoh")
+    }
+
     #[pyo3(signature = (key, payload, metadata_json = None))]
     fn publish(
         &self,
@@ -1744,39 +1798,33 @@ impl PyTransport {
     ) -> PyTransportEnvelope {
         let payload_arc = Arc::<[u8]>::from(payload.into_boxed_slice());
         let metadata_arc = metadata_json.map(|value| Arc::<str>::from(value.into_boxed_str()));
-        let env = rfx_core::comm::TransportBackend::publish(
-            self.inner.as_ref(),
-            key,
-            payload_arc,
-            metadata_arc,
-        );
+        let env = self.inner.publish(key, payload_arc, metadata_arc);
         PyTransportEnvelope { inner: env }
     }
 
     #[pyo3(signature = (pattern, capacity = 1024))]
     fn subscribe(&self, pattern: &str, capacity: usize) -> PyTransportSubscription {
-        let sub =
-            rfx_core::comm::TransportBackend::subscribe(self.inner.as_ref(), pattern, capacity);
+        let sub = self.inner.subscribe(pattern, capacity);
         PyTransportSubscription { inner: sub }
     }
 
     fn unsubscribe(&self, subscription_id: u64) -> bool {
-        rfx_core::comm::TransportBackend::unsubscribe(self.inner.as_ref(), subscription_id)
+        self.inner.unsubscribe(subscription_id)
     }
 
     fn unsubscribe_sub(&self, subscription: &PyTransportSubscription) -> bool {
-        rfx_core::comm::TransportBackend::unsubscribe(self.inner.as_ref(), subscription.inner.id())
+        self.inner.unsubscribe(subscription.inner.id())
     }
 
     #[getter]
     fn subscriber_count(&self) -> usize {
-        rfx_core::comm::TransportBackend::subscription_count(self.inner.as_ref())
+        self.inner.subscription_count()
     }
 
     fn __repr__(&self) -> String {
         format!(
             "Transport(subscribers={})",
-            rfx_core::comm::TransportBackend::subscription_count(self.inner.as_ref())
+            self.inner.subscription_count()
         )
     }
 }

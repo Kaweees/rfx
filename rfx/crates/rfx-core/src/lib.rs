@@ -48,6 +48,9 @@ pub mod sim;
 
 // Re-exports for convenience
 pub use comm::{Channel, InprocTransport, Stream, Topic, TransportBackend};
+
+#[cfg(feature = "zenoh")]
+pub use comm::{ZenohTransport, ZenohTransportConfig};
 pub use control::{ControlLoop, ControlLoopHandle, Pid, PidConfig};
 pub use hardware::{Command, Robot, RobotState, Simulator};
 pub use math::{Filter, LowPassFilter, Quaternion, Transform};

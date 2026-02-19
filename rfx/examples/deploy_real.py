@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """
-Deploy a trained policy to a real SO-101 arm.
+Canonical deploy example for rfx.
 
-This is the simplest path from a trained checkpoint to hardware. You
-provide a robot config, a policy, and call rfx.run(). The Session
-handles reset, warmup, rate control, torch.no_grad(), and Ctrl+C.
+Use this file when you want the shortest path from a policy checkpoint
+to a control loop on hardware. The exact same script can run in mock
+mode for pre-hardware validation.
+
+Typical workflow:
+1) run `--mock` to validate policy output shapes and loop timing
+2) switch to real serial port
+3) optionally load a checkpoint and tune control rate
 
 Key concepts:
     rfx.RealRobot        — real hardware via serial (same API as SimRobot)
@@ -12,9 +17,8 @@ Key concepts:
     rfx.run()            — one-liner: connect policy to robot and go
     rfx.Session          — context-manager variant for more control
 
-Robot configs (rfx/configs/):
-    so101.yaml           — SO-101 arm, 6 joints, 50 Hz
-    so101_bimanual.yaml  — bimanual SO-101, 12 joints, 50 Hz
+Config defaults:
+    Uses built-in SO-101 config from `rfx-sdk` unless --config is provided.
 
 Usage:
     # Test without hardware
@@ -34,6 +38,7 @@ import torch
 import torch.nn as nn
 
 import rfx
+from rfx.config import SO101_CONFIG
 
 
 # -------------------------------------------------------------------
@@ -68,7 +73,7 @@ class SimpleVLA(nn.Module):
 
 def main():
     parser = argparse.ArgumentParser(description="Deploy policy to real robot")
-    parser.add_argument("--config", default="so101.yaml", help="Robot config file in rfx/configs/")
+    parser.add_argument("--config", default=None, help="Optional path to a robot YAML config")
     parser.add_argument("--port", default="/dev/ttyACM0", help="Serial port for real robot")
     parser.add_argument("--checkpoint", default=None, help="Path to trained checkpoint (.pt)")
     parser.add_argument("--mock", action="store_true", help="Use MockRobot (no hardware)")
@@ -82,12 +87,17 @@ def main():
     # MockRobot runs a simple spring-damper physics model in pure
     # PyTorch — same observe()/act()/reset() interface as RealRobot.
     # -------------------------------------------------------------------
-    config_path = Path(__file__).parent.parent / "configs" / args.config
+    config = SO101_CONFIG.to_dict()
+    if args.config:
+        config_path = Path(args.config).expanduser()
+        if not config_path.exists():
+            raise FileNotFoundError(f"Config not found: {config_path}")
+        config = config_path
 
     if args.mock:
         robot = rfx.MockRobot(state_dim=12, action_dim=6)
     else:
-        robot = rfx.RealRobot.from_config(config_path, port=args.port)
+        robot = rfx.RealRobot.from_config(config, port=args.port)
 
     print(f"Robot: {robot}")
 

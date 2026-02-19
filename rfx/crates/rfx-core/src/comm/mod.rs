@@ -8,7 +8,13 @@ mod stream;
 mod topic;
 mod transport;
 
+#[cfg(feature = "zenoh")]
+mod zenoh;
+
 pub use channel::{bounded_channel, unbounded_channel, Channel, Receiver, Sender};
 pub use stream::{Stream, StreamConfig, StreamHandle};
 pub use topic::{Topic, TopicConfig};
 pub use transport::{InprocTransport, TransportBackend, TransportEnvelope, TransportSubscription};
+
+#[cfg(feature = "zenoh")]
+pub use self::zenoh::{ZenohTransport, ZenohTransportConfig};

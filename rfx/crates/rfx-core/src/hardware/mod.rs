@@ -12,11 +12,14 @@ mod traits;
 #[cfg(feature = "hardware-go2")]
 pub use go2::{
     dds::{DdsBackend, DustDdsBackend},
-    Go2, Go2Config, Go2State, ImuState, LowCmd, LowState, MotorCmd, MotorState, SportModeCmd,
+    Go2, Go2BackendHint, Go2Config, Go2State, ImuState, LowCmd, LowState, MotorCmd, MotorState,
+    SportModeCmd,
 };
 #[cfg(feature = "hardware-so101")]
 pub use so101::{So101, So101Config, So101State};
 
+#[cfg(all(feature = "hardware-go2", feature = "zenoh"))]
+pub use go2::dds::ZenohDdsBackend;
 #[cfg(all(feature = "hardware-go2", feature = "dds-cyclone"))]
 pub use go2::dds::CycloneDdsBackend;
 pub use traits::{Command, Robot, RobotState, Simulator};

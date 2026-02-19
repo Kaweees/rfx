@@ -6,11 +6,12 @@ Goal: one simple API across simulation and real hardware backends.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
 from pathlib import Path
-from typing import Literal, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, Literal, Optional, Union
 
+from .config import GO2_CONFIG, SO101_CONFIG
 from .envs import Go2Env
 from .providers import use as use_providers
 
@@ -162,23 +163,46 @@ class UniversalRobot:
         )
 
 
+def _default_config_for(robot: RobotName) -> Dict[str, Any]:
+    if robot == "go2":
+        return GO2_CONFIG.to_dict()
+    return SO101_CONFIG.to_dict()
+
+
 def connect(
     robot: RobotName = "go2",
     backend: BackendName = "mock",
-    config: Optional[str] = None,
+    config: Optional[Union[str, Path, Dict[str, Any]]] = None,
     *,
     num_envs: int = 1,
     device: str = "cpu",
+    dds_backend: Optional[str] = None,
+    zenoh_endpoint: Optional[str] = None,
     **kwargs,
 ) -> UniversalRobot:
     """
     Universal connection helper.
 
+    Args:
+        robot: Robot type ("go2" or "so101").
+        backend: Simulation or hardware backend ("mock", "genesis", "mjx", "real").
+        config: Config path, dict, or None for defaults.
+        num_envs: Number of parallel environments (sim only).
+        device: Tensor device ("cpu" or "cuda").
+        dds_backend: Go2 DDS backend ("zenoh", "dust", "cyclone").
+            Can also be set via RFX_GO2_BACKEND env var.
+        zenoh_endpoint: Zenoh router endpoint for Go2 (e.g. "tcp/192.168.123.161:7447").
+            Implies dds_backend="zenoh".
+        **kwargs: Additional kwargs forwarded to the backend.
+
     Examples:
-        >>> bot = connect("go2", backend="genesis", config="rfx/configs/go2.yaml")
+        >>> bot = connect("go2", backend="mock")
         >>> bot.reset()
         >>> bot.command(vx=0.5)
         >>> obs = bot.step()
+
+        >>> bot = connect("go2", backend="real", dds_backend="zenoh")
+        >>> bot = connect("go2", backend="real", zenoh_endpoint="tcp/10.0.0.1:7447")
     """
     from .real import RealRobot
     from .sim import SimRobot
@@ -190,17 +214,22 @@ def connect(
         use_providers("go2")
 
     if config is None:
-        if robot == "go2":
-            config = "rfx/configs/go2.yaml"
-        else:
-            config = "rfx/configs/so101.yaml"
+        config_payload: Union[Path, Dict[str, Any]] = _default_config_for(robot)
+    elif isinstance(config, dict):
+        config_payload = config
+    else:
+        config_payload = Path(config)
 
-    config_path = Path(config)
     if backend == "real":
-        impl = RealRobot.from_config(config_path, **kwargs)
+        # Forward DDS backend options to the hardware backend
+        if dds_backend is not None:
+            kwargs["dds_backend"] = dds_backend
+        if zenoh_endpoint is not None:
+            kwargs["zenoh_endpoint"] = zenoh_endpoint
+        impl = RealRobot.from_config(config_payload, **kwargs)
     else:
         impl = SimRobot.from_config(
-            config_path,
+            config_payload,
             num_envs=num_envs,
             backend=backend,
             device=device,

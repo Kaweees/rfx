@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Visualise a robot in the Genesis physics engine.
+Canonical Genesis visualization example for rfx.
 
-Opens a live 3D viewer and steps the simulation with a simple
-sinusoidal joint command, so you can see the robot move.
+Use this script to verify simulator setup, URDF loading, and control
+signal flow before moving to training or deployment. It intentionally
+uses a simple periodic action so visual behavior is easy to inspect.
 
 Key concepts:
     rfx.SimRobot         — unified sim interface for all backends
@@ -11,13 +12,12 @@ Key concepts:
     viewer=True          — opens a live 3D window
     robot.act(action)    — steps physics with joint position commands
 
-Robot configs (rfx/configs/):
-    so101.yaml           — SO-101 arm, 6 joints
-    go2.yaml             — Unitree Go2, 12 joints
+Config defaults:
+    Uses built-in SO-101 config from `rfx-sdk` unless --config is provided.
 
 Usage:
     uv run rfx/examples/genesis_viewer.py
-    uv run rfx/examples/genesis_viewer.py --config rfx/configs/go2.yaml --steps 5000
+    uv run rfx/examples/genesis_viewer.py --steps 5000
     uv run rfx/examples/genesis_viewer.py --auto-install  # pip install genesis-world
 """
 
@@ -25,15 +25,17 @@ from __future__ import annotations
 
 import argparse
 import time
+from pathlib import Path
 
 import torch
 
 import rfx
+from rfx.config import SO101_CONFIG
 
 
 def main():
     parser = argparse.ArgumentParser(description="Genesis simulation viewer")
-    parser.add_argument("--config", default="rfx/configs/so101.yaml", help="Robot config YAML")
+    parser.add_argument("--config", default=None, help="Optional path to a robot YAML config")
     parser.add_argument("--num-envs", type=int, default=1, help="Parallel environments")
     parser.add_argument("--steps", type=int, default=2000, help="Simulation steps")
     parser.add_argument("--substeps", type=int, default=4, help="Physics substeps per step")
@@ -53,8 +55,15 @@ def main():
     if args.dt is not None:
         kwargs["dt"] = args.dt
 
+    config = SO101_CONFIG.to_dict()
+    if args.config:
+        path = Path(args.config).expanduser()
+        if not path.exists():
+            raise FileNotFoundError(f"Config not found: {path}")
+        config = path
+
     robot = rfx.SimRobot.from_config(
-        args.config,
+        config,
         num_envs=args.num_envs,
         backend="genesis",
         device=args.device,

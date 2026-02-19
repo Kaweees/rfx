@@ -152,5 +152,9 @@ GO2_CONFIG = RobotConfig(
     max_state_dim=64,
     max_action_dim=64,
     control_freq_hz=200,
-    hardware={"ip_address": "192.168.123.161"},
+    hardware={
+        "ip_address": "192.168.123.161",
+        # dds_backend: "zenoh" | "dust" | "cyclone" | None (auto)
+        # zenoh_endpoint: "tcp/192.168.123.161:7447" (optional)
+    },
 )

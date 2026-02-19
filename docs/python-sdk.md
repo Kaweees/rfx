@@ -18,7 +18,6 @@ rfx.use("sim", "go2")  # optional provider activation from rfx namespace
 bot = rfx.connect_robot(
     "go2",
     backend="genesis",  # mock | genesis | mjx | real
-    config="rfx/configs/go2.yaml",
 )
 
 bot.reset()
@@ -28,6 +27,8 @@ bot.close()
 ```
 
 Everything starts from `import rfx`. You can still import other Python libraries (for example `torch`) in the same script as needed.
+
+When `config` is omitted, `rfx-sdk` now uses built-in defaults (`GO2_CONFIG`/`SO101_CONFIG`) so examples work from wheel installs without repo-local YAML files.
 
 ## Package Layout
 

@@ -11,6 +11,7 @@ default = ["hardware-go2", "hardware-so101"]
 dds-cyclone = []
 hardware-go2 = ["dep:dust_dds", "dep:crc32fast"]
 hardware-so101 = ["dep:serialport"]
+zenoh = ["dep:zenoh"]
 
 [dependencies]
 tokio.workspace = true
@@ -26,6 +27,9 @@ tracing.workspace = true
 dust_dds = { workspace = true, optional = true }
 crc32fast = { workspace = true, optional = true }
 arrayvec = { version = "0.7", features = ["serde"] }
+
+# Zenoh transport
+zenoh = { workspace = true, optional = true }
 
 # Serial communication (for SO-101)
 serialport = { version = "4.3", optional = true }

@@ -34,12 +34,23 @@ class CameraStreamConfig:
 
 
 @dataclass(frozen=True)
+class ZenohConfig:
+    """Zenoh transport backend configuration."""
+
+    connect: tuple[str, ...] = ()
+    listen: tuple[str, ...] = ()
+    shared_memory: bool = True
+    key_prefix: str = ""
+
+
+@dataclass(frozen=True)
 class TransportConfig:
     """Transport behavior for teleop runtime paths."""
 
     backend: TransportBackend = "inproc"
     zero_copy_hot_path: bool = True
     queue_capacity: int = 1024
+    zenoh: ZenohConfig | None = None
 
 
 @dataclass(frozen=True)

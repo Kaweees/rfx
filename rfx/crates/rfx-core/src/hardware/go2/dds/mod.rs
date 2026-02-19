@@ -27,6 +27,9 @@ mod messages;
 
 pub mod dust;
 
+#[cfg(feature = "zenoh")]
+pub mod zenoh_dds;
+
 #[cfg(feature = "dds-cyclone")]
 pub mod cyclone;
 
@@ -39,6 +42,9 @@ pub use messages::{
 
 // Re-export the default backend
 pub use dust::DustDdsBackend;
+
+#[cfg(feature = "zenoh")]
+pub use zenoh_dds::ZenohDdsBackend;
 
 #[cfg(feature = "dds-cyclone")]
 pub use cyclone::CycloneDdsBackend;

@@ -136,5 +136,10 @@ def test_create_transport_falls_back_to_python_inproc(monkeypatch) -> None:
 def test_create_transport_rejects_unwired_backends() -> None:
     with pytest.raises(NotImplementedError):
         transport_mod.create_transport(TransportConfig(backend="dds"))
-    with pytest.raises(NotImplementedError):
+
+
+def test_create_transport_zenoh_raises_without_bindings(monkeypatch) -> None:
+    """Zenoh factory raises RuntimeError when Rust bindings are missing."""
+    monkeypatch.setattr(transport_mod, "_RustTransport", None)
+    with pytest.raises(RuntimeError, match="unavailable"):
         transport_mod.create_transport(TransportConfig(backend="zenoh"))

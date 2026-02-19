@@ -9,6 +9,7 @@ from .config import (
     JitPolicyConfig,
     TeleopSessionConfig,
     TransportConfig,
+    ZenohConfig,
 )
 from .lerobot_writer import LeRobotExportConfig, LeRobotPackageWriter
 from .recorder import LeRobotRecorder, RecordedEpisode
@@ -19,8 +20,10 @@ from .transport import (
     RustTransport,
     Subscription,
     TransportEnvelope,
+    ZenohTransport,
     create_transport,
     rust_transport_available,
+    zenoh_transport_available,
 )
 
 __all__ = [
@@ -41,8 +44,11 @@ __all__ = [
     "TeleopSessionConfig",
     "TransportConfig",
     "TransportEnvelope",
+    "ZenohConfig",
+    "ZenohTransport",
     "create_transport",
     "rust_transport_available",
+    "zenoh_transport_available",
     "assert_jitter_budget",
     "run_jitter_benchmark",
 ]

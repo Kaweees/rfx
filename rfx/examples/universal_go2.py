@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """
-Universal Go2 runner using rfx SDK.
+Canonical Go2 control example for rfx.
+
+Use this file to validate one command-level workflow across multiple
+backends (`mock`, `genesis`, `mjx`, `real`) without changing your
+control code. This is the reference script for the "one API, many
+backends" story.
 
 Usage:
     uv run --python 3.13 rfx/examples/universal_go2.py --backend genesis --auto-install
@@ -11,14 +16,16 @@ from __future__ import annotations
 
 import argparse
 import time
+from pathlib import Path
 
 import rfx
+from rfx.config import GO2_CONFIG
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Universal Go2 runner (sim/real)")
     parser.add_argument("--backend", choices=["mock", "genesis", "mjx", "real"], default="genesis")
-    parser.add_argument("--config", default="rfx/configs/go2.yaml")
+    parser.add_argument("--config", default=None, help="Optional path to a Go2 YAML config")
     parser.add_argument("--steps", type=int, default=2000)
     parser.add_argument("--vx", type=float, default=0.6)
     parser.add_argument("--vy", type=float, default=0.0)
@@ -29,6 +36,13 @@ def main() -> None:
     parser.add_argument("--auto-install", action="store_true")
     args = parser.parse_args()
 
+    config = GO2_CONFIG.to_dict()
+    if args.config:
+        path = Path(args.config).expanduser()
+        if not path.exists():
+            raise FileNotFoundError(f"Config not found: {path}")
+        config = path
+
     kwargs = {}
     if args.backend == "genesis":
         kwargs["viewer"] = not args.headless
@@ -37,7 +51,7 @@ def main() -> None:
     bot = rfx.connect_robot(
         "go2",
         backend=args.backend,
-        config=args.config,
+        config=config,
         num_envs=args.num_envs,
         device=args.device,
         **kwargs,

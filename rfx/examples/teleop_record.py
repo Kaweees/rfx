@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Record teleoperation episodes with the SO-101 arm.
+Canonical teleoperation data-collection example for rfx.
 
-Uses rfx.teleop to run a high-rate control loop between leader and
-follower arms, optionally capturing camera frames and exporting to
-LeRobot or MCAP format.
+Use this script to collect demonstrations from leader/follower SO-101
+arms with optional camera capture. It is the reference pipeline for
+dataset generation and export to LeRobot or MCAP.
 
 Key concepts:
     rfx.BimanualSo101Session — high-rate teleop session with async cameras

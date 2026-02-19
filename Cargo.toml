@@ -35,6 +35,9 @@ crc32fast = "1.4"
 # Note: cyclonedds-rs requires CycloneDDS installed on system
 # cyclonedds-rs = "0.3"
 
+# Zenoh transport
+zenoh = { version = "1.7", default-features = false, features = ["transport_tcp", "transport_udp", "shared-memory"] }
+
 # Utilities
 thiserror = "2"
 tracing = "0.1"

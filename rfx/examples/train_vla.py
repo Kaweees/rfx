@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-Train a VLA (Vision-Language-Action) policy in simulation.
+Canonical training example for rfx.
 
-Uses the rfx v2 Robot API to run massively parallel simulation (up to
-4096 envs) and train a policy with simple REINFORCE-style gradients.
+Use this file as the baseline pattern for simulation-first policy
+training: create a parallel robot, roll out actions, compute loss, and
+handle selective resets. It is intentionally minimal so teams can swap
+in their own reward, model, and optimizer logic quickly.
 
 Key concepts:
     rfx.SimRobot         — GPU-accelerated parallel simulation
@@ -16,9 +18,8 @@ Simulation backends (pass --backend):
     genesis  — Genesis physics engine
     mjx      — MuJoCo XLA
 
-Robot configs (rfx/configs/):
-    so101.yaml           — SO-101 arm, 6 joints
-    go2.yaml             — Unitree Go2, 12 joints
+Config defaults:
+    Uses built-in SO-101 config from `rfx-sdk` unless --config is provided.
 
 Usage:
     uv run rfx/examples/train_vla.py --num_envs 16 --steps 10000 --backend mock
@@ -32,6 +33,7 @@ import torch
 import torch.nn as nn
 
 import rfx
+from rfx.config import SO101_CONFIG
 
 
 # -------------------------------------------------------------------
@@ -61,7 +63,7 @@ class SimpleVLA(nn.Module):
 
 def main():
     parser = argparse.ArgumentParser(description="Train a VLA in simulation")
-    parser.add_argument("--config", default="so101.yaml", help="Robot config in rfx/configs/")
+    parser.add_argument("--config", default=None, help="Optional path to a robot YAML config")
     parser.add_argument("--num_envs", type=int, default=16, help="Parallel environments")
     parser.add_argument("--steps", type=int, default=10000, help="Training steps")
     parser.add_argument("--backend", default="mock", help="Sim backend: mock, genesis, mjx")
@@ -76,10 +78,15 @@ def main():
     # SimRobot.from_config() reads a YAML config and creates num_envs
     # parallel physics instances. All tensors are on the given device.
     # -------------------------------------------------------------------
-    config_path = Path(__file__).parent.parent / "configs" / args.config
+    config = SO101_CONFIG.to_dict()
+    if args.config:
+        config_path = Path(args.config).expanduser()
+        if not config_path.exists():
+            raise FileNotFoundError(f"Config not found: {config_path}")
+        config = config_path
 
     robot = rfx.SimRobot.from_config(
-        config_path,
+        config,
         num_envs=args.num_envs,
         backend=args.backend,
         device=args.device,

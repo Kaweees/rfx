@@ -40,6 +40,8 @@ pub mod dds;
 mod types;
 
 pub use dds::{DdsBackend, DustDdsBackend};
+#[cfg(feature = "zenoh")]
+pub use dds::ZenohDdsBackend;
 pub use types::{
     BmsState, Go2State, ImuState, LowCmd, LowState, MotorCmd, MotorState, RobotMode, SportModeCmd,
     SportModeState,
@@ -58,6 +60,17 @@ use super::{motor_idx::NUM_MOTORS, Command, Robot, RobotState};
 use crate::comm::Receiver;
 use crate::{Error, Result};
 
+/// Preferred DDS backend hint for Go2 communication.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Go2BackendHint {
+    /// Zenoh transport via zenoh-bridge-dds
+    Zenoh,
+    /// Native CycloneDDS backend
+    CycloneDds,
+    /// Pure Rust dust-dds backend
+    DustDds,
+}
+
 /// Go2 robot configuration
 #[derive(Debug, Clone)]
 pub struct Go2Config {
@@ -75,6 +88,11 @@ pub struct Go2Config {
     pub connection_timeout: Duration,
     /// DDS domain ID (default: 0)
     pub dds_domain_id: i32,
+    /// Zenoh router endpoint (e.g. "tcp/192.168.123.161:7447").
+    /// If None, uses Zenoh's default multicast peer discovery.
+    pub zenoh_endpoint: Option<String>,
+    /// Preferred DDS backend. None = auto-detect.
+    pub preferred_backend: Option<Go2BackendHint>,
 }
 
 impl Default for Go2Config {
@@ -87,6 +105,8 @@ impl Default for Go2Config {
             network_interface: None,
             connection_timeout: Duration::from_secs(5),
             dds_domain_id: 0,
+            zenoh_endpoint: None,
+            preferred_backend: None,
         }
     }
 }
@@ -115,6 +135,18 @@ impl Go2Config {
     /// Set the DDS domain ID
     pub fn with_domain_id(mut self, domain_id: i32) -> Self {
         self.dds_domain_id = domain_id;
+        self
+    }
+
+    /// Set the Zenoh router endpoint (e.g. "tcp/192.168.123.161:7447")
+    pub fn with_zenoh_endpoint(mut self, endpoint: impl Into<String>) -> Self {
+        self.zenoh_endpoint = Some(endpoint.into());
+        self
+    }
+
+    /// Set the preferred DDS backend
+    pub fn with_backend(mut self, hint: Go2BackendHint) -> Self {
+        self.preferred_backend = Some(hint);
         self
     }
 }
@@ -187,27 +219,76 @@ impl<T: DdsBackend + Sync> DdsBackendExt for T {
 }
 
 impl Go2 {
-    /// Connect to a Go2 robot using the default DDS backend
+    /// Connect to a Go2 robot using the best available DDS backend.
     ///
-    /// Uses DustDdsBackend (pure Rust) by default. For native CycloneDDS,
-    /// use `connect_with_backend` with `CycloneDdsBackend`.
+    /// Backend selection priority:
+    /// 1. If `preferred_backend` is set → use that specific backend
+    /// 2. Auto-detect: Zenoh → CycloneDDS → DustDDS
     pub fn connect(config: Go2Config) -> Result<Self> {
-        #[cfg(feature = "dds-cyclone")]
+        // If user explicitly requested a backend, use it
+        if let Some(hint) = config.preferred_backend {
+            return match hint {
+                #[cfg(feature = "zenoh")]
+                Go2BackendHint::Zenoh => {
+                    let backend = dds::ZenohDdsBackend::new(&config)?;
+                    tracing::info!("Using ZenohDds backend (explicit)");
+                    Self::connect_with_backend(config, backend)
+                }
+                #[cfg(not(feature = "zenoh"))]
+                Go2BackendHint::Zenoh => {
+                    Err(Error::Config(
+                        "Zenoh backend requested but 'zenoh' feature not enabled".into(),
+                    ))
+                }
+                #[cfg(feature = "dds-cyclone")]
+                Go2BackendHint::CycloneDds => {
+                    let backend = CycloneDdsBackend::new(&config)?;
+                    tracing::info!("Using CycloneDDS backend (explicit)");
+                    Self::connect_with_backend(config, backend)
+                }
+                #[cfg(not(feature = "dds-cyclone"))]
+                Go2BackendHint::CycloneDds => {
+                    Err(Error::Config(
+                        "CycloneDDS backend requested but 'dds-cyclone' feature not enabled".into(),
+                    ))
+                }
+                Go2BackendHint::DustDds => {
+                    let backend = DustDdsBackend::new(&config)?;
+                    tracing::info!("Using dust-dds backend (explicit)");
+                    Self::connect_with_backend(config, backend)
+                }
+            };
+        }
+
+        // Auto-detect: try backends in priority order
+        #[cfg(feature = "zenoh")]
         {
-            // Try CycloneDDS first if feature is enabled, fall back to dust-dds
-            match CycloneDdsBackend::new(&config) {
+            match dds::ZenohDdsBackend::new(&config) {
                 Ok(backend) => {
-                    tracing::info!("Using CycloneDDS backend");
+                    tracing::info!("Using ZenohDds backend (auto)");
                     return Self::connect_with_backend(config, backend);
                 }
                 Err(e) => {
-                    tracing::warn!("CycloneDDS backend failed, falling back to dust-dds: {}", e);
+                    tracing::warn!("ZenohDds backend failed, trying next: {e}");
+                }
+            }
+        }
+
+        #[cfg(feature = "dds-cyclone")]
+        {
+            match CycloneDdsBackend::new(&config) {
+                Ok(backend) => {
+                    tracing::info!("Using CycloneDDS backend (auto)");
+                    return Self::connect_with_backend(config, backend);
+                }
+                Err(e) => {
+                    tracing::warn!("CycloneDDS backend failed, falling back to dust-dds: {e}");
                 }
             }
         }
 
         let backend = DustDdsBackend::new(&config)?;
-        tracing::info!("Using dust-dds backend");
+        tracing::info!("Using dust-dds backend (fallback)");
         Self::connect_with_backend(config, backend)
     }
 

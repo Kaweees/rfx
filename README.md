@@ -33,35 +33,6 @@ It is inspired by PyTorch (ergonomics), JAX (functional transforms and IR-based 
 
 ---
 
-## How rfx compares
-
-### ROS
-
-- Similar: robot-facing abstractions, hardware integration, and runtime concerns.
-- Similar: practical interfaces for real robot systems.
-- Different: rfx is built around data collection, embodiment pipelines, and model-driven robotics workflows.
-- Different: ROS interop lets teams migrate incrementally instead of rewriting everything at once.
-
-### PyTorch
-
-- Similar: familiar Python-first APIs and policy/training workflows.
-- Similar: easy integration with existing model code.
-- Different: rfx is more than a tensor/training library and ships robotics-native interfaces (`observe`/`act`/`reset`) plus deployment/runtime hooks.
-
-### JAX
-
-- Similar: IR-centered runtime approach and JIT-style execution paths.
-- Similar: transform-friendly kernel representation in `rfxJIT`.
-- Different: rfx focuses on robotics control loops and deployment ergonomics over broad functional transform coverage.
-
-### TVM
-
-- Similar: lowering, optimization passes, and backend code generation.
-- Similar: explicit execution/runtime separation.
-- Different: rfx includes the full robotics-facing product surface, not only compiler infrastructure.
-
----
-
 ## Repository layout
 
 ```
@@ -108,6 +79,13 @@ uv pip install git+https://github.com/quantbagel/rfx.git
 ```bash
 uv pip install rfx-sdk
 uv pip install rfx-sdk-sim rfx-sdk-go2 rfx-sdk-lerobot
+```
+
+### TestPyPI (current test channel)
+
+```bash
+uv pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple \
+  rfx-sdk rfx-sdk-sim rfx-sdk-go2 rfx-sdk-lerobot torch
 ```
 
 ### Direct (local path)

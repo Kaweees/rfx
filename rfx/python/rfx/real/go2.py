@@ -30,6 +30,8 @@ class Go2Backend:
         config: RobotConfig,
         ip_address: str = "192.168.123.161",
         edu_mode: bool = False,
+        dds_backend: Optional[str] = None,
+        zenoh_endpoint: Optional[str] = None,
         **kwargs,
     ):
         self.config = config
@@ -42,8 +44,12 @@ class Go2Backend:
         self._latest_lowstate = None
         self._state_lock = threading.Lock()
 
-        backend_pref = os.getenv("RFX_GO2_BACKEND", "auto").strip().lower()
-        if backend_pref not in {"auto", "rust", "unitree", "unitree_sdk2py"}:
+        # Resolve DDS backend: explicit param > env var > auto
+        backend_pref = (
+            dds_backend
+            or os.getenv("RFX_GO2_BACKEND", "auto")
+        ).strip().lower()
+        if backend_pref not in {"auto", "rust", "unitree", "unitree_sdk2py", "zenoh", "dust", "cyclone"}:
             backend_pref = "auto"
 
         if not self.edu_mode and backend_pref in {"auto", "unitree", "unitree_sdk2py"}:
@@ -65,6 +71,18 @@ class Go2Backend:
         rust_config = Go2Config(ip_address)
         if edu_mode:
             rust_config = rust_config.with_edu_mode()
+
+        # Apply DDS backend hint
+        hint_map = {"zenoh": "zenoh", "dust": "dust", "cyclone": "cyclone"}
+        if backend_pref in hint_map and hasattr(rust_config, "with_backend"):
+            rust_config = rust_config.with_backend(hint_map[backend_pref])
+
+        # Apply Zenoh endpoint (also implies zenoh backend if not already set)
+        if zenoh_endpoint:
+            if backend_pref not in hint_map and hasattr(rust_config, "with_backend"):
+                rust_config = rust_config.with_backend("zenoh")
+            if hasattr(rust_config, "with_zenoh_router"):
+                rust_config = rust_config.with_zenoh_router(zenoh_endpoint)
 
         self._robot = Go2.connect(rust_config)
 
@@ -347,9 +365,39 @@ class Go2Backend:
 
 
 class Go2Robot:
-    """Convenience class for Go2 robot."""
+    """Convenience class for Go2 robot.
 
-    def __new__(cls, ip_address: str = "192.168.123.161", **kwargs):
+    Args:
+        ip_address: Robot IP address.
+        dds_backend: DDS backend to use ("zenoh", "dust", "cyclone", or None for auto).
+            Can also be set via RFX_GO2_BACKEND env var.
+        zenoh_endpoint: Zenoh router endpoint (e.g. "tcp/192.168.123.161:7447").
+            Setting this implies dds_backend="zenoh".
+        edu_mode: Enable low-level motor control.
+        **kwargs: Additional kwargs forwarded to RealRobot.
+
+    Examples:
+        >>> go2 = Go2Robot()                                    # auto-detect backend
+        >>> go2 = Go2Robot(dds_backend="zenoh")                 # force Zenoh via bridge
+        >>> go2 = Go2Robot(zenoh_endpoint="tcp/10.0.0.1:7447")  # Zenoh with explicit router
+    """
+
+    def __new__(
+        cls,
+        ip_address: str = "192.168.123.161",
+        dds_backend: Optional[str] = None,
+        zenoh_endpoint: Optional[str] = None,
+        edu_mode: bool = False,
+        **kwargs,
+    ):
         from .base import RealRobot
 
-        return RealRobot(config=GO2_CONFIG, robot_type="go2", ip_address=ip_address, **kwargs)
+        return RealRobot(
+            config=GO2_CONFIG,
+            robot_type="go2",
+            ip_address=ip_address,
+            dds_backend=dds_backend,
+            zenoh_endpoint=zenoh_endpoint,
+            edu_mode=edu_mode,
+            **kwargs,
+        )

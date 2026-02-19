@@ -209,6 +209,76 @@ class RustTransport:
         return int(self._inner.subscriber_count)
 
 
+class ZenohTransport:
+    """
+    Zenoh-backed keyed transport with the same API shape as `RustTransport`.
+
+    Requires the ``zenoh`` feature to be compiled into the native extension.
+    """
+
+    def __init__(
+        self,
+        *,
+        connect: tuple[str, ...] | list[str] = (),
+        listen: tuple[str, ...] | list[str] = (),
+        shared_memory: bool = True,
+        key_prefix: str = "",
+    ) -> None:
+        if _RustTransport is None:
+            raise RuntimeError(
+                "Rust transport bindings are unavailable. Build extension with maturin develop."
+            )
+        if not hasattr(_RustTransport, "zenoh_available") or not _RustTransport.zenoh_available():
+            raise RuntimeError(
+                "Zenoh support is not compiled in. "
+                "Rebuild with: maturin develop --features 'extension-module,zenoh'"
+            )
+        self._inner = _RustTransport.zenoh(
+            list(connect),
+            list(listen),
+            shared_memory,
+            key_prefix,
+        )
+
+    def subscribe(self, pattern: str, capacity: int = 1024) -> RustSubscription:
+        return RustSubscription(self._inner.subscribe(pattern, capacity))
+
+    def unsubscribe(self, sub: RustSubscription | int) -> bool:
+        if isinstance(sub, RustSubscription):
+            return bool(self._inner.unsubscribe(sub.id))
+        return bool(self._inner.unsubscribe(int(sub)))
+
+    def publish(
+        self,
+        key: str,
+        payload: Any,
+        *,
+        metadata: dict[str, Any] | None = None,
+        timestamp_ns: int | None = None,
+    ) -> TransportEnvelope:
+        if timestamp_ns is not None:
+            metadata = dict(metadata or {})
+            metadata["_timestamp_ns"] = int(timestamp_ns)
+
+        payload_bytes = _normalize_payload_bytes(payload)
+        metadata_json = json.dumps(metadata, sort_keys=True) if metadata else None
+        env = self._inner.publish(key, payload_bytes, metadata_json)
+        return _from_rust_envelope(env)
+
+    @property
+    def subscriber_count(self) -> int:
+        return int(self._inner.subscriber_count)
+
+
+def zenoh_transport_available() -> bool:
+    """Return whether Zenoh transport support is compiled and importable."""
+    if _RustTransport is None:
+        return False
+    if not hasattr(_RustTransport, "zenoh_available"):
+        return False
+    return bool(_RustTransport.zenoh_available())
+
+
 class TransportLike(Protocol):
     """Unified transport protocol consumed by the teleop session runtime."""
 
@@ -248,9 +318,20 @@ def create_transport(config: "TransportConfig") -> TransportLike:
             return RustTransport()
         return InprocTransport()
 
-    if backend in {"zenoh", "dds"}:
+    if backend == "zenoh":
+        from .config import ZenohConfig
+
+        zenoh_cfg = config.zenoh if config.zenoh is not None else ZenohConfig()
+        return ZenohTransport(
+            connect=zenoh_cfg.connect,
+            listen=zenoh_cfg.listen,
+            shared_memory=zenoh_cfg.shared_memory,
+            key_prefix=zenoh_cfg.key_prefix,
+        )
+
+    if backend == "dds":
         raise NotImplementedError(
-            f"Transport backend {backend!r} is declared but not wired yet. "
+            "Transport backend 'dds' is declared but not wired yet. "
             "Use backend='inproc' for now."
         )
 

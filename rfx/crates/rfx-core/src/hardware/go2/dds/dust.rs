@@ -54,44 +54,44 @@ struct DdsHandle {
 }
 
 #[derive(Debug, Clone, DdsType)]
-struct RequestIdentityWire {
+pub(super) struct RequestIdentityWire {
     id: i64,
     api_id: i64,
 }
 
 #[derive(Debug, Clone, DdsType)]
-struct RequestLeaseWire {
+pub(super) struct RequestLeaseWire {
     id: i64,
 }
 
 #[derive(Debug, Clone, DdsType)]
-struct RequestPolicyWire {
+pub(super) struct RequestPolicyWire {
     priority: i32,
     noreply: bool,
 }
 
 #[derive(Debug, Clone, DdsType)]
-struct RequestHeaderWire {
+pub(super) struct RequestHeaderWire {
     identity: RequestIdentityWire,
     lease: RequestLeaseWire,
     policy: RequestPolicyWire,
 }
 
 #[derive(Debug, Clone, DdsType)]
-struct RequestWire {
+pub(super) struct RequestWire {
     header: RequestHeaderWire,
     parameter: String,
     binary: Vec<u8>,
 }
 
-fn monotonic_like_request_id() -> i64 {
+pub(super) fn monotonic_like_request_id() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_nanos() as i64)
         .unwrap_or(0)
 }
 
-fn sport_request_to_wire(cmd: &SportModeRequestDds, req_id: i64, no_reply: bool) -> RequestWire {
+pub(super) fn sport_request_to_wire(cmd: &SportModeRequestDds, req_id: i64, no_reply: bool) -> RequestWire {
     let api_id = cmd.header.api_id as i64;
     RequestWire {
         header: RequestHeaderWire {
@@ -358,8 +358,22 @@ fn dds_command_writer(
 
     tracing::debug!("DDS command writer stopped");
 }
+/// Serialize a sport request to CDR bytes for publishing via Zenoh.
+///
+/// Uses dust_dds's DdsSerialize to produce the exact CDR encoding
+/// that the zenoh-bridge-dds expects.
+pub(super) fn sport_request_to_cdr(
+    cmd: &SportModeRequestDds,
+    req_id: i64,
+) -> crate::Result<Vec<u8>> {
+    use dust_dds::topic_definition::type_support::DdsSerialize;
+    let wire = sport_request_to_wire(cmd, req_id, true);
+    wire.serialize_data()
+        .map_err(|e| crate::Error::Communication(format!("CDR serialization failed: {e:?}")))
+}
+
 /// Convert SportModeCmd to DDS format
-fn sport_cmd_to_dds(cmd: &SportModeCmd) -> SportModeRequestDds {
+pub(super) fn sport_cmd_to_dds(cmd: &SportModeCmd) -> SportModeRequestDds {
     match cmd.mode {
         0 => SportModeRequestDds::stop(),
         1 => {

@@ -13,7 +13,7 @@ Run this from the repo root:
 
 ```bash
 uv pip install --python 3.13 torch
-uv run --python 3.13 rfx/examples/genesis_viewer.py --config rfx/configs/so101.yaml --auto-install
+uv run --python 3.13 rfx/examples/genesis_viewer.py --auto-install
 ```
 
 What this does:
@@ -41,17 +41,17 @@ rfx/assets/robots/go2/
 Then run:
 
 ```bash
-uv run --python 3.13 rfx/examples/genesis_viewer.py --config rfx/configs/go2.yaml --auto-install
+uv run --python 3.13 rfx/examples/universal_go2.py --backend genesis --auto-install
 ```
 
 `rfx/configs/go2.yaml` now defaults `urdf_path` to:
 
 - `rfx/assets/robots/go2/urdf/go2.urdf`
 
-For a walking demo:
+For a Go2 command demo:
 
 ```bash
-uv run --python 3.13 rfx/examples/go2_walk_genesis.py --auto-install
+uv run --python 3.13 rfx/examples/universal_go2.py --backend genesis --auto-install
 ```
 
 ## Minimal Python API
@@ -74,7 +74,7 @@ obs = robot.reset()
 Viewer mode:
 
 ```bash
-uv run --python 3.13 rfx/examples/genesis_viewer.py --config rfx/configs/so101.yaml
+uv run --python 3.13 rfx/examples/genesis_viewer.py
 ```
 
 Headless mode (no viewer):
@@ -88,7 +88,6 @@ Control runtime knobs:
 
 ```bash
 uv run --python 3.13 rfx/examples/genesis_viewer.py \
-  --config rfx/configs/so101.yaml \
   --num-envs 1 \
   --steps 2000 \
   --substeps 4
