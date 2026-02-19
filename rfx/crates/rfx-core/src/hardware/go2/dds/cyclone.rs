@@ -5,7 +5,7 @@
 //!
 //! # System Requirements
 //!
-//! - CycloneDDS installed (https://github.com/eclipse-cyclonedds/cyclonedds)
+//! - CycloneDDS installed (<https://github.com/eclipse-cyclonedds/cyclonedds>)
 //! - cyclonedds-rs Rust bindings
 //!
 //! # Building

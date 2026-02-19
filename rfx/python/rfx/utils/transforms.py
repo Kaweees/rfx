@@ -5,7 +5,7 @@ rfx.utils.transforms - Observation and action transforms
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import torch
@@ -42,6 +42,28 @@ class ObservationNormalizer:
         M2 = m_a + m_b + delta**2 * self._count * batch_count / total_count
         self._var = M2 / total_count
         self._count = total_count
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize normalizer state to a JSON-compatible dict."""
+        return {
+            "state_dim": self.state_dim,
+            "clip": self.clip,
+            "eps": self.eps,
+            "mean": self._mean.tolist(),
+            "var": self._var.tolist(),
+            "count": self._count,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> ObservationNormalizer:
+        """Reconstruct a normalizer from a serialized dict."""
+        import torch
+
+        norm = cls(state_dim=d["state_dim"], clip=d.get("clip", 10.0), eps=d.get("eps", 1e-8))
+        norm._mean = torch.tensor(d["mean"])
+        norm._var = torch.tensor(d["var"])
+        norm._count = d["count"]
+        return norm
 
     def normalize(self, obs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         import torch

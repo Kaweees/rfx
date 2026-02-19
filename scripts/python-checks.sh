@@ -157,14 +157,21 @@ run_test() {
 }
 
 run_build() {
+  local python_bin="$1"
   local maturin_bin
   local uv_cache_dir
   local install_mode
+  local has_virtual_env
   maturin_bin="$(resolve_maturin)"
   uv_cache_dir="${UV_CACHE_DIR:-$ROOT/.cache/uv}"
   install_mode="${RFX_MATURIN_INSTALL_MODE:-auto}"
+  has_virtual_env=0
 
   mkdir -p "$uv_cache_dir"
+
+  if [[ -n "${VIRTUAL_ENV:-}" || -n "${CONDA_PREFIX:-}" || -x "$ROOT/.venv/bin/python" ]]; then
+    has_virtual_env=1
+  fi
 
   case "$install_mode" in
     install)
@@ -174,9 +181,21 @@ run_build() {
       UV_CACHE_DIR="$uv_cache_dir" "$maturin_bin" develop --release --skip-install
       ;;
     auto)
-      if ! UV_CACHE_DIR="$uv_cache_dir" "$maturin_bin" develop --release; then
-        echo "maturin develop install failed; retrying with --skip-install" >&2
-        UV_CACHE_DIR="$uv_cache_dir" "$maturin_bin" develop --release --skip-install
+      if [[ "$has_virtual_env" -eq 1 ]]; then
+        if ! UV_CACHE_DIR="$uv_cache_dir" "$maturin_bin" develop --release; then
+          echo "maturin develop install failed; retrying with --skip-install" >&2
+          UV_CACHE_DIR="$uv_cache_dir" "$maturin_bin" develop --release --skip-install
+        fi
+      else
+        echo "No virtualenv detected; using wheel build + pip install fallback." >&2
+        UV_CACHE_DIR="$uv_cache_dir" "$maturin_bin" build --release
+        shopt -s nullglob
+        local wheels=(target/wheels/*.whl)
+        if (( ${#wheels[@]} == 0 )); then
+          echo "No wheels produced in target/wheels" >&2
+          exit 1
+        fi
+        "$python_bin" -m pip install --force-reinstall "${wheels[@]}"
       fi
       ;;
     *)
@@ -222,7 +241,7 @@ main() {
       run_test "$python_bin"
       ;;
     build)
-      run_build
+      run_build "$python_bin"
       ;;
     ci)
       run_lint "$python_bin"

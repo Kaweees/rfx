@@ -13,10 +13,13 @@ Example:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+import rfx
 
 from .jit import PolicyJitRuntime
 
@@ -46,6 +49,15 @@ def _check_tinygrad():
         raise ImportError(
             "tinygrad is required for neural network support. Install with: pip install tinygrad"
         )
+
+
+_POLICY_REGISTRY: dict[str, type[Policy]] = {}
+
+
+def register_policy(cls: type[Policy]) -> type[Policy]:
+    """Register a policy class for auto-detection during load."""
+    _POLICY_REGISTRY[cls.__name__] = cls
+    return cls
 
 
 class Policy:
@@ -82,40 +94,104 @@ class Policy:
         """Run inference (JIT compiled after first call)."""
         return self.forward(obs)
 
+    def config_dict(self) -> dict[str, Any]:
+        """Return constructor arguments needed to recreate this policy."""
+        raise NotImplementedError(
+            f"{type(self).__name__} must implement config_dict() for saving"
+        )
+
+    @classmethod
+    def from_config_dict(cls, d: dict[str, Any]) -> Policy:
+        """Reconstruct a policy from its config dict."""
+        return cls(**d)
+
     def parameters(self) -> list:
         """Get all trainable parameters."""
         _check_tinygrad()
         return get_parameters(self)
 
-    def save(self, path: str | Path) -> None:
-        """
-        Save policy weights to a safetensors file.
+    def save(
+        self,
+        path: str | Path,
+        *,
+        robot_config: Any | None = None,
+        normalizer: Any | None = None,
+        training_info: dict[str, Any] | None = None,
+    ) -> Path:
+        """Save policy as a self-describing directory.
 
         Args:
-            path: Path to save the weights (should end in .safetensors)
+            path: Directory path to save into
+            robot_config: Optional RobotConfig to bundle
+            normalizer: Optional ObservationNormalizer to bundle
+            training_info: Optional training metadata dict
+
+        Returns:
+            The directory path
         """
         _check_tinygrad()
+        path = Path(path)
+        path.mkdir(parents=True, exist_ok=True)
+
+        # Weights
         state = get_state_dict(self)
-        safe_save(state, str(path))
+        safe_save(state, str(path / "model.safetensors"))
+
+        # Config
+        config: dict[str, Any] = {
+            "rfx_version": rfx.__version__,
+            "policy_type": type(self).__name__,
+            "policy_config": self.config_dict(),
+        }
+        if robot_config is not None:
+            config["robot_config"] = robot_config.to_dict()
+        if training_info is not None:
+            config["training"] = training_info
+
+        (path / "rfx_config.json").write_text(json.dumps(config, indent=2))
+
+        # Normalizer
+        if normalizer is not None:
+            (path / "normalizer.json").write_text(json.dumps(normalizer.to_dict(), indent=2))
+
+        return path
 
     @classmethod
     def load(cls, path: str | Path) -> Policy:
-        """
-        Load policy weights from a safetensors file.
+        """Load a self-describing policy from a directory.
 
-        Note: This creates a new instance and loads weights into it.
-        The subclass must have a no-argument constructor.
+        If called on the base Policy class, auto-detects the type from rfx_config.json.
+        If called on a subclass (e.g. MLP.load()), uses that subclass.
+        Falls back to legacy single-file safetensors if no directory found.
 
         Args:
-            path: Path to the saved weights
+            path: Directory path or legacy .safetensors file
 
         Returns:
             Policy instance with loaded weights
         """
         _check_tinygrad()
-        policy = cls()
-        state = safe_load(str(path))
-        load_state_dict(policy, state)
+        path = Path(path)
+
+        # Legacy: bare safetensors file
+        if path.is_file() and path.suffix == ".safetensors":
+            policy = cls()
+            load_state_dict(policy, safe_load(str(path)))
+            return policy
+
+        config_path = path / "rfx_config.json"
+        config = json.loads(config_path.read_text())
+
+        # Resolve class
+        if cls is Policy:
+            policy_cls = _POLICY_REGISTRY.get(config["policy_type"])
+            if policy_cls is None:
+                raise ValueError(f"Unknown policy type: {config['policy_type']}")
+        else:
+            policy_cls = cls
+
+        policy = policy_cls.from_config_dict(config["policy_config"])
+        load_state_dict(policy, safe_load(str(path / "model.safetensors")))
         return policy
 
     def to_numpy(self, tensor: Tensor) -> np.ndarray:
@@ -123,6 +199,7 @@ class Policy:
         return tensor.numpy()
 
 
+@register_policy
 class MLP(Policy):
     """
     Multi-layer perceptron policy.
@@ -162,6 +239,9 @@ class MLP(Policy):
         self.layers = []
         for i in range(len(dims) - 1):
             self.layers.append(Linear(dims[i], dims[i + 1]))
+
+    def config_dict(self) -> dict[str, Any]:
+        return {"obs_dim": self.obs_dim, "act_dim": self.act_dim, "hidden": list(self.hidden)}
 
     def forward(self, obs: Tensor) -> Tensor:
         """Forward pass with tanh activations."""
@@ -213,6 +293,7 @@ class JitPolicy(Policy):
         return f"JitPolicy({self._policy!r})"
 
 
+@register_policy
 class ActorCritic(Policy):
     """
     Actor-critic network for PPO training.
@@ -243,6 +324,7 @@ class ActorCritic(Policy):
 
         self.obs_dim = obs_dim
         self.act_dim = act_dim
+        self.hidden = hidden
 
         # Shared backbone
         self.backbone = []
@@ -258,6 +340,9 @@ class ActorCritic(Policy):
 
         # Learnable log std for action distribution
         self.log_std = Tensor.zeros(act_dim)
+
+    def config_dict(self) -> dict[str, Any]:
+        return {"obs_dim": self.obs_dim, "act_dim": self.act_dim, "hidden": list(self.hidden)}
 
     def _backbone_forward(self, obs: Tensor) -> Tensor:
         """Forward through shared backbone."""
@@ -360,5 +445,6 @@ __all__ = [
     "ActorCritic",
     "go2_mlp",
     "go2_actor_critic",
+    "register_policy",
     "TINYGRAD_AVAILABLE",
 ]

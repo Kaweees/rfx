@@ -205,7 +205,8 @@ jobs:
 
       - name: Build and install package
         run: |
-          maturin develop --release
+          maturin build --release
+          pip install --force-reinstall target/wheels/*.whl
 
       - name: Run Python tests
         run: |
@@ -260,7 +261,9 @@ jobs:
           pip install pytest maturin
 
       - name: Build package
-        run: maturin develop --release
+        run: |
+          maturin build --release
+          pip install --force-reinstall target/wheels/*.whl
 
       - name: Run integration tests
         run: pytest rfx/tests/integration/ -v

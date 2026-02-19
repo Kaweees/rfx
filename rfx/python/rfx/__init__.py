@@ -89,6 +89,7 @@ except ImportError:
 
 from . import jit, utils
 from .config import CameraConfig, JointConfig, RobotConfig, load_config
+from .hub import LoadedPolicy, inspect_policy, load_policy, push_policy
 from .observation import ObservationSpec, make_observation, unpad_action
 from .robot import Robot, RobotBase
 from .session import Session, SessionStats, run
@@ -183,6 +184,10 @@ except ModuleNotFoundError:
 
 __all__ = [
     # v2 API
+    "LoadedPolicy",
+    "load_policy",
+    "push_policy",
+    "inspect_policy",
     "URDF",
     "Robot",
     "RobotBase",
