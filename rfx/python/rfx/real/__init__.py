@@ -6,7 +6,8 @@ Same interface as simulation - no ROS, no middleware.
 
 from .base import RealRobot
 from .camera import Camera, RealSenseCamera
+from .g1 import G1Robot
 from .go2 import Go2Robot
 from .so101 import So101Robot
 
-__all__ = ["RealRobot", "So101Robot", "Go2Robot", "Camera", "RealSenseCamera"]
+__all__ = ["RealRobot", "So101Robot", "Go2Robot", "G1Robot", "Camera", "RealSenseCamera"]

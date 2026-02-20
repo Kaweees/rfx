@@ -115,6 +115,11 @@ class LoadedPolicy:
         if isinstance(obs, dict):
             if self.normalizer is not None:
                 obs = self.normalizer.normalize(obs)
+
+            # Torch-native policies (e.g. TorchJitPolicy) skip tinygrad conversion
+            if getattr(self.policy, "_is_torch_native", False):
+                return self.policy(obs)
+
             obs = self._dict_to_tinygrad(obs)
             action = self.policy(obs)
             return self._tinygrad_to_torch(action)

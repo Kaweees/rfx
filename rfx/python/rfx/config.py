@@ -158,3 +158,56 @@ GO2_CONFIG = RobotConfig(
         # zenoh_endpoint: "tcp/192.168.123.161:7447" (optional)
     },
 )
+
+# Unitree G1 humanoid: 29 DOF
+# Joint ordering matches official G1JointIndex from unitree_sdk2py:
+#   left_leg[0:6], right_leg[6:12], waist[12:15],
+#   left_arm[15:22], right_arm[22:29]
+# state_dim=69: 29 pos + 29 vel + 4 quat + 3 gyro + 4 foot_contacts
+G1_CONFIG = RobotConfig(
+    name="Unitree G1",
+    state_dim=69,
+    action_dim=29,
+    max_state_dim=128,
+    max_action_dim=64,
+    control_freq_hz=50,
+    joints=[
+        # Left leg (0-5) — matches G1JointIndex
+        JointConfig(name="left_hip_pitch", index=0, position_min=-2.53, position_max=2.53),
+        JointConfig(name="left_hip_roll", index=1, position_min=-0.52, position_max=0.52),
+        JointConfig(name="left_hip_yaw", index=2, position_min=-2.87, position_max=2.87),
+        JointConfig(name="left_knee", index=3, position_min=-0.26, position_max=2.05),
+        JointConfig(name="left_ankle_pitch", index=4, position_min=-0.87, position_max=0.52),
+        JointConfig(name="left_ankle_roll", index=5, position_min=-0.26, position_max=0.26),
+        # Right leg (6-11)
+        JointConfig(name="right_hip_pitch", index=6, position_min=-2.53, position_max=2.53),
+        JointConfig(name="right_hip_roll", index=7, position_min=-0.52, position_max=0.52),
+        JointConfig(name="right_hip_yaw", index=8, position_min=-2.87, position_max=2.87),
+        JointConfig(name="right_knee", index=9, position_min=-0.26, position_max=2.05),
+        JointConfig(name="right_ankle_pitch", index=10, position_min=-0.87, position_max=0.52),
+        JointConfig(name="right_ankle_roll", index=11, position_min=-0.26, position_max=0.26),
+        # Waist (12-14)
+        JointConfig(name="waist_yaw", index=12, position_min=-2.35, position_max=2.35),
+        JointConfig(name="waist_roll", index=13, position_min=-0.52, position_max=0.52),
+        JointConfig(name="waist_pitch", index=14, position_min=-0.52, position_max=0.52),
+        # Left arm (15-21)
+        JointConfig(name="left_shoulder_pitch", index=15, position_min=-3.11, position_max=2.18),
+        JointConfig(name="left_shoulder_roll", index=16, position_min=-1.58, position_max=2.62),
+        JointConfig(name="left_shoulder_yaw", index=17, position_min=-2.62, position_max=2.62),
+        JointConfig(name="left_elbow", index=18, position_min=-1.69, position_max=1.69),
+        JointConfig(name="left_wrist_roll", index=19, position_min=-1.61, position_max=1.61),
+        JointConfig(name="left_wrist_pitch", index=20, position_min=-0.52, position_max=0.52),
+        JointConfig(name="left_wrist_yaw", index=21, position_min=-0.52, position_max=0.52),
+        # Right arm (22-28)
+        JointConfig(name="right_shoulder_pitch", index=22, position_min=-3.11, position_max=2.18),
+        JointConfig(name="right_shoulder_roll", index=23, position_min=-2.62, position_max=1.58),
+        JointConfig(name="right_shoulder_yaw", index=24, position_min=-2.62, position_max=2.62),
+        JointConfig(name="right_elbow", index=25, position_min=-1.69, position_max=1.69),
+        JointConfig(name="right_wrist_roll", index=26, position_min=-1.61, position_max=1.61),
+        JointConfig(name="right_wrist_pitch", index=27, position_min=-0.52, position_max=0.52),
+        JointConfig(name="right_wrist_yaw", index=28, position_min=-0.52, position_max=0.52),
+    ],
+    hardware={
+        "ip_address": "192.168.123.161",
+    },
+)

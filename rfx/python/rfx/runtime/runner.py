@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .launch import load_launch_file
+from .launch import evaluate_condition, load_launch_file
 from .node import Node, NodeContext
 from .packages import discover_packages, resolve_node_entry
 from .registry import load_registry, write_registry
@@ -50,20 +50,45 @@ def run_node(
 
 def launch(spec_path: str | Path) -> int:
     spec = load_launch_file(spec_path)
+
+    # Set env vars from launch spec
+    for k, v in spec.env.items():
+        os.environ[str(k)] = str(v)
+
     profile_env = {}
     if spec.profile in spec.profiles:
         profile_env = {str(k): str(v) for k, v in spec.profiles[spec.profile].items()}
+
+    # Resolve includes
+    spec_dir = Path(spec_path).parent
+    for include in spec.includes:
+        if not evaluate_condition(include.condition):
+            continue
+        include_path = spec_dir / include.file
+        if include_path.exists():
+            included_spec = load_launch_file(include_path)
+            spec.nodes.extend(included_spec.nodes)
 
     procs: list[subprocess.Popen] = []
     reg = {"launch": spec.name, "nodes": [], "topics": {"publish": [], "subscribe": []}}
     write_registry(reg)
     try:
         for n in spec.nodes:
+            # Evaluate node condition
+            if not evaluate_condition(n.condition):
+                continue
+
             node_name = n.name or f"{n.package}.{n.node}"
             env = os.environ.copy()
             env["RFX_BACKEND"] = spec.backend
             env.update(profile_env)
-            params_json = __import__("json").dumps(n.params)
+
+            # Merge remap into params so the node can access them
+            params = dict(n.params)
+            if n.remap:
+                params["_remap"] = n.remap
+
+            params_json = __import__("json").dumps(params)
             cmd = [
                 sys.executable,
                 "-m",

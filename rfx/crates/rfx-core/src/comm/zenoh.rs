@@ -56,22 +56,17 @@ struct ZenohSubscriptionEntry {
     _subscriber: Subscriber<()>,
 }
 
-/// Zenoh-backed keyed transport backend.
+/// Shared Zenoh context — wraps a session and key prefix.
 ///
-/// All operations are synchronous — Zenoh 1.7's builder API exposes `.wait()`
-/// methods that perform the work on the calling thread.
-pub struct ZenohTransport {
-    session: zenoh::Session,
-    subscriptions: RwLock<Vec<ZenohSubscriptionEntry>>,
-    next_seq: AtomicU64,
-    next_sub_id: AtomicU64,
+/// All Zenoh-backed subsystems (transport, services, discovery, parameters)
+/// share a single `ZenohContext` so they use the same session and prefix.
+pub struct ZenohContext {
+    session: Arc<zenoh::Session>,
     key_prefix: String,
 }
 
-impl ZenohTransport {
+impl ZenohContext {
     /// Open a new Zenoh session with the given configuration.
-    ///
-    /// Blocks the caller while the session is established.
     pub fn new(config: ZenohTransportConfig) -> crate::Result<Self> {
         let mut zenoh_config = zenoh::Config::default();
 
@@ -109,12 +104,71 @@ impl ZenohTransport {
             .map_err(|e| crate::Error::Connection(format!("failed to open zenoh session: {e}")))?;
 
         Ok(Self {
-            session,
+            session: Arc::new(session),
+            key_prefix: config.key_prefix,
+        })
+    }
+
+    /// Create a transport backend from this context.
+    pub fn transport(&self) -> ZenohTransport {
+        ZenohTransport::from_context(self)
+    }
+
+    /// Access the underlying Zenoh session.
+    pub fn session(&self) -> &Arc<zenoh::Session> {
+        &self.session
+    }
+
+    /// Get the key prefix.
+    pub fn key_prefix(&self) -> &str {
+        &self.key_prefix
+    }
+
+    /// Ordered shutdown: close session.
+    pub fn shutdown(&self) -> crate::Result<()> {
+        self.session.close().wait().map_err(|e| {
+            crate::Error::Communication(format!("failed to close zenoh session: {e}"))
+        })
+    }
+}
+
+impl Drop for ZenohContext {
+    fn drop(&mut self) {
+        // Best-effort shutdown on drop
+        let _ = self.session.close().wait();
+    }
+}
+
+/// Zenoh-backed keyed transport backend.
+///
+/// All operations are synchronous — Zenoh 1.7's builder API exposes `.wait()`
+/// methods that perform the work on the calling thread.
+pub struct ZenohTransport {
+    session: Arc<zenoh::Session>,
+    subscriptions: RwLock<Vec<ZenohSubscriptionEntry>>,
+    next_seq: AtomicU64,
+    next_sub_id: AtomicU64,
+    key_prefix: String,
+}
+
+impl ZenohTransport {
+    /// Open a new Zenoh session with the given configuration.
+    ///
+    /// Blocks the caller while the session is established.
+    pub fn new(config: ZenohTransportConfig) -> crate::Result<Self> {
+        let ctx = ZenohContext::new(config)?;
+        Ok(Self::from_context(&ctx))
+    }
+
+    /// Create a transport from an existing ZenohContext.
+    pub fn from_context(ctx: &ZenohContext) -> Self {
+        Self {
+            session: ctx.session.clone(),
             subscriptions: RwLock::new(Vec::new()),
             next_seq: AtomicU64::new(0),
             next_sub_id: AtomicU64::new(1),
-            key_prefix: config.key_prefix,
-        })
+            key_prefix: ctx.key_prefix.clone(),
+        }
     }
 
     /// Build a full key expression with the configured prefix.

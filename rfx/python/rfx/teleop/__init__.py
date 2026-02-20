@@ -26,6 +26,15 @@ from .transport import (
     zenoh_transport_available,
 )
 
+# G1 humanoid VR teleop (optional — guarded because torch may not be installed)
+try:
+    from .g1 import G1SafetyConfig, G1SafetyLayer, G1TeleopConfig, G1TeleopSession
+    from .g1_obs import G1ObsConfig, G1ObservationBuilder
+    from .retarget import G1Retargeter, RetargetBase, RetargetConfig, SimpleRetargeter
+    from .vr import VRConfig, VRMotionPublisher
+except ImportError:
+    pass
+
 __all__ = [
     "ArmPairConfig",
     "BimanualSo101Session",

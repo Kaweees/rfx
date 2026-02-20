@@ -93,6 +93,21 @@ fn _rfx(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyTransportSubscription>()?;
     m.add_class::<PyTransport>()?;
 
+    // QoS types
+    m.add_class::<PyQoSProfile>()?;
+
+    // Service types
+    m.add_class::<PyServiceBackend>()?;
+
+    // Discovery types
+    m.add_class::<PyDiscovery>()?;
+
+    // Parameter types
+    m.add_class::<PyParameterServer>()?;
+
+    // Schema types
+    m.add_class::<PySchemaRegistry>()?;
+
     Ok(())
 }
 

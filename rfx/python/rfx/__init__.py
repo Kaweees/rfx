@@ -156,6 +156,39 @@ except ModuleNotFoundError:
     run_jitter_benchmark = None
 
 # ============================================================================
+# rfx v2 modules: tf, drivers, viz, nav
+# ============================================================================
+
+try:
+    from . import tf
+    from .tf import TransformBuffer, TransformBroadcaster, TransformListener
+except ModuleNotFoundError:
+    tf = None
+    TransformBuffer = None
+    TransformBroadcaster = None
+    TransformListener = None
+
+try:
+    from . import drivers
+    from .drivers import RobotDriver, get_driver, list_drivers, register_driver
+except ModuleNotFoundError:
+    drivers = None
+    RobotDriver = None
+    get_driver = None
+    list_drivers = None
+    register_driver = None
+
+try:
+    from . import viz
+except ModuleNotFoundError:
+    viz = None
+
+try:
+    from . import nav
+except ModuleNotFoundError:
+    nav = None
+
+# ============================================================================
 # rfx v1 API (backward compatible)
 # ============================================================================
 
@@ -229,6 +262,18 @@ __all__ = [
     "create_transport",
     "rust_transport_available",
     "run_jitter_benchmark",
+    # v2 modules
+    "tf",
+    "TransformBuffer",
+    "TransformBroadcaster",
+    "TransformListener",
+    "drivers",
+    "RobotDriver",
+    "get_driver",
+    "list_drivers",
+    "register_driver",
+    "viz",
+    "nav",
     # v1 API
     "__version__",
     "VERSION",

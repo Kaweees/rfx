@@ -5,6 +5,7 @@
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
+use rfx_core::comm::DiscoveryBackend;
 use std::sync::Arc;
 
 // ============================================================================
@@ -1825,4 +1826,236 @@ impl PyTransport {
     fn __repr__(&self) -> String {
         format!("Transport(subscribers={})", self.inner.subscription_count())
     }
+}
+
+// ============================================================================
+// QoS Bindings
+// ============================================================================
+
+/// QoS profile for transport configuration.
+#[pyclass(name = "QoSProfile")]
+#[derive(Clone)]
+pub struct PyQoSProfile {
+    inner: rfx_core::comm::QoSProfile,
+}
+
+#[pymethods]
+impl PyQoSProfile {
+    /// Create a QoS profile for sensor data (best-effort, drop on backpressure).
+    #[staticmethod]
+    fn sensor_data() -> Self {
+        Self { inner: rfx_core::comm::QoSProfile::sensor_data() }
+    }
+
+    /// Create a reliable QoS profile (block on backpressure).
+    #[staticmethod]
+    fn reliable() -> Self {
+        Self { inner: rfx_core::comm::QoSProfile::reliable() }
+    }
+
+    /// Create a QoS profile for parameters (reliable, transient-local).
+    #[staticmethod]
+    fn parameters() -> Self {
+        Self { inner: rfx_core::comm::QoSProfile::parameters() }
+    }
+
+    /// Create a QoS profile for system events.
+    #[staticmethod]
+    fn system_events() -> Self {
+        Self { inner: rfx_core::comm::QoSProfile::system_events() }
+    }
+
+    fn __repr__(&self) -> String {
+        format!("QoSProfile(reliability={:?}, durability={:?})",
+            self.inner.reliability, self.inner.durability)
+    }
+}
+
+// ============================================================================
+// Service Bindings
+// ============================================================================
+
+/// In-process service backend.
+#[pyclass(name = "ServiceBackend")]
+pub struct PyServiceBackend {
+    inner: Arc<rfx_core::comm::InprocServiceBackend>,
+}
+
+#[pymethods]
+impl PyServiceBackend {
+    #[new]
+    fn new() -> Self {
+        Self {
+            inner: Arc::new(rfx_core::comm::InprocServiceBackend::new()),
+        }
+    }
+
+    fn list_services(&self) -> Vec<String> {
+        rfx_core::comm::ServiceBackend::list_services(self.inner.as_ref())
+    }
+
+    fn __repr__(&self) -> String {
+        let services = rfx_core::comm::ServiceBackend::list_services(self.inner.as_ref());
+        format!("ServiceBackend(services={})", services.len())
+    }
+}
+
+// ============================================================================
+// Discovery Bindings
+// ============================================================================
+
+/// In-process discovery backend.
+#[pyclass(name = "Discovery")]
+pub struct PyDiscovery {
+    inner: Arc<rfx_core::comm::InprocDiscovery>,
+}
+
+#[pymethods]
+impl PyDiscovery {
+    #[new]
+    fn new() -> Self {
+        Self {
+            inner: Arc::new(rfx_core::comm::InprocDiscovery::new()),
+        }
+    }
+
+    fn declare_node(&self, name: &str) -> PyResult<()> {
+        let _token = self.inner.declare_node(name)
+            .map_err(|e: rfx_core::Error| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(())
+    }
+
+    fn declare_publisher(&self, node: &str, topic: &str) -> PyResult<()> {
+        let _token = self.inner.declare_publisher(node, topic)
+            .map_err(|e: rfx_core::Error| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(())
+    }
+
+    fn declare_subscriber(&self, node: &str, topic: &str) -> PyResult<()> {
+        let _token = self.inner.declare_subscriber(node, topic)
+            .map_err(|e: rfx_core::Error| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(())
+    }
+
+    fn list_nodes(&self) -> Vec<String> {
+        rfx_core::comm::DiscoveryBackend::list_nodes(self.inner.as_ref())
+    }
+
+    fn list_topics(&self) -> Vec<(String, Vec<String>, Vec<String>)> {
+        rfx_core::comm::DiscoveryBackend::list_topics(self.inner.as_ref())
+            .into_iter()
+            .map(|t| (t.name, t.publishers, t.subscribers))
+            .collect()
+    }
+
+    fn __repr__(&self) -> String {
+        let nodes = rfx_core::comm::DiscoveryBackend::list_nodes(self.inner.as_ref());
+        format!("Discovery(nodes={})", nodes.len())
+    }
+}
+
+// ============================================================================
+// Parameter Bindings
+// ============================================================================
+
+/// Parameter server for a node.
+#[pyclass(name = "ParameterServer")]
+pub struct PyParameterServer {
+    inner: rfx_core::comm::ParameterServer,
+}
+
+#[pymethods]
+impl PyParameterServer {
+    #[new]
+    fn new(node_name: &str) -> PyResult<Self> {
+        let service = rfx_core::comm::InprocServiceBackend::new();
+        let transport = Arc::new(rfx_core::comm::InprocTransport::new());
+        let server = rfx_core::comm::ParameterServer::new(node_name, &service, transport)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(Self { inner: server })
+    }
+
+    fn declare(&self, key: &str, default_value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let value = py_to_param_value(default_value)?;
+        self.inner.declare(key, value);
+        Ok(())
+    }
+
+    fn get(&self, key: &str, py: Python<'_>) -> Option<Py<PyAny>> {
+        self.inner.get(key).map(|v| param_value_to_py(py, &v))
+    }
+
+    fn set(&self, key: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let param = py_to_param_value(value)?;
+        self.inner.set(key, param)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    fn list(&self) -> Vec<String> {
+        self.inner.list()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("ParameterServer(params={})", self.inner.list().len())
+    }
+}
+
+/// Schema registry for message types.
+#[pyclass(name = "SchemaRegistry")]
+pub struct PySchemaRegistry {
+    inner: rfx_core::comm::SchemaRegistry,
+}
+
+#[pymethods]
+impl PySchemaRegistry {
+    #[new]
+    fn new() -> Self {
+        Self {
+            inner: rfx_core::comm::SchemaRegistry::new(),
+        }
+    }
+
+    fn register(&self, type_name: &str, description: &str, version: &str) -> PyResult<()> {
+        let schema = rfx_core::comm::MessageSchema {
+            type_name: type_name.to_owned(),
+            json_schema: None,
+            description: description.to_owned(),
+            version: version.to_owned(),
+        };
+        self.inner.register(schema);
+        Ok(())
+    }
+
+    fn list(&self) -> Vec<String> {
+        self.inner.list()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("SchemaRegistry(schemas={})", self.inner.list().len())
+    }
+}
+
+// Helper functions for ParamValue <-> Python conversion
+fn py_to_param_value(value: &Bound<'_, PyAny>) -> PyResult<rfx_core::comm::ParamValue> {
+    if let Ok(b) = value.extract::<bool>() {
+        Ok(rfx_core::comm::ParamValue::Bool(b))
+    } else if let Ok(i) = value.extract::<i64>() {
+        Ok(rfx_core::comm::ParamValue::Int(i))
+    } else if let Ok(f) = value.extract::<f64>() {
+        Ok(rfx_core::comm::ParamValue::Float(f))
+    } else if let Ok(s) = value.extract::<String>() {
+        Ok(rfx_core::comm::ParamValue::String(s))
+    } else {
+        Err(PyValueError::new_err("unsupported parameter type"))
+    }
+}
+
+fn param_value_to_py(py: Python<'_>, value: &rfx_core::comm::ParamValue) -> Py<PyAny> {
+    let json_value = value.to_json();
+    // Convert serde_json::Value to Python via JSON string round-trip
+    let json_str = json_value.to_string();
+    let json_mod = py.import("json").expect("json module");
+    json_mod.call_method1("loads", (json_str,))
+        .expect("json.loads failed")
+        .unbind()
 }

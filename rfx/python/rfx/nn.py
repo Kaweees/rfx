@@ -453,13 +453,107 @@ def go2_actor_critic(hidden: list[int] | None = None) -> ActorCritic:
     return ActorCritic(obs_dim=48, act_dim=12, hidden=hidden)
 
 
+try:
+    import torch as _torch
+
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+
+
+@register_policy
+class TorchJitPolicy(Policy):
+    """Policy wrapper for PyTorch TorchScript (.pt) models.
+
+    Loads a model saved with ``torch.jit.save()`` and exposes it through
+    the standard rfx Policy interface.  Accepts ``dict[str, torch.Tensor]``
+    observations directly — no tinygrad conversion.
+
+    Args:
+        model_path: Path to the ``.pt`` TorchScript file.
+        obs_keys: Observation dict keys to concatenate as model input.
+        device: Torch device string.
+    """
+
+    _is_torch_native = True
+
+    def __init__(
+        self,
+        model_path: str | Path | None = None,
+        obs_keys: list[str] | None = None,
+        device: str = "cpu",
+    ):
+        if not TORCH_AVAILABLE:
+            raise ImportError("PyTorch is required for TorchJitPolicy.")
+        self.model_path = str(model_path) if model_path is not None else None
+        self.obs_keys = obs_keys or ["state"]
+        self.device = device
+        self._model = None
+        if model_path is not None:
+            self._model = _torch.jit.load(str(model_path), map_location=device)
+            self._model.eval()
+
+    def forward(self, obs):
+        raise NotImplementedError("Use __call__ directly")
+
+    def __call__(self, obs):
+        if isinstance(obs, dict):
+            parts = [obs[k] for k in self.obs_keys]
+            x = _torch.cat(parts, dim=-1).to(self.device)
+        else:
+            x = obs
+        with _torch.no_grad():
+            return self._model(x)
+
+    def config_dict(self) -> dict[str, Any]:
+        return {"model_path": self.model_path, "obs_keys": list(self.obs_keys), "device": self.device}
+
+    def save(self, path: str | Path, *, robot_config: Any | None = None,
+             normalizer: Any | None = None, training_info: dict[str, Any] | None = None) -> Path:
+        import shutil
+        path = Path(path)
+        path.mkdir(parents=True, exist_ok=True)
+        if self.model_path is not None:
+            src = Path(self.model_path)
+            dst = path / "model.pt"
+            if src.resolve() != dst.resolve():
+                shutil.copy2(src, dst)
+        config: dict[str, Any] = {
+            "rfx_version": rfx.__version__, "policy_type": type(self).__name__,
+            "policy_config": {"model_path": "model.pt", "obs_keys": list(self.obs_keys), "device": self.device},
+        }
+        if robot_config is not None:
+            config["robot_config"] = robot_config.to_dict()
+        if training_info is not None:
+            config["training"] = training_info
+        (path / "rfx_config.json").write_text(json.dumps(config, indent=2))
+        if normalizer is not None:
+            (path / "normalizer.json").write_text(json.dumps(normalizer.to_dict(), indent=2))
+        return path
+
+    @classmethod
+    def load(cls, path: str | Path) -> TorchJitPolicy:
+        path = Path(path)
+        if path.is_file() and path.suffix == ".pt":
+            return cls(model_path=str(path))
+        config = json.loads((path / "rfx_config.json").read_text())
+        pc = config["policy_config"]
+        return cls(model_path=str(path / pc.get("model_path", "model.pt")),
+                   obs_keys=pc.get("obs_keys", ["state"]), device=pc.get("device", "cpu"))
+
+    def __repr__(self) -> str:
+        return f"TorchJitPolicy(model_path={self.model_path!r}, obs_keys={self.obs_keys})"
+
+
 __all__ = [
     "Policy",
     "MLP",
     "JitPolicy",
+    "TorchJitPolicy",
     "ActorCritic",
     "go2_mlp",
     "go2_actor_critic",
     "register_policy",
     "TINYGRAD_AVAILABLE",
+    "TORCH_AVAILABLE",
 ]

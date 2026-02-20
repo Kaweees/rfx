@@ -52,6 +52,8 @@ class RealRobot(RobotBase):
         name = self._config.name.lower()
         if "so101" in name or "so-101" in name:
             return "so101"
+        elif "g1" in name and "go" not in name:
+            return "g1"
         elif "go2" in name:
             return "go2"
         else:
@@ -66,7 +68,20 @@ class RealRobot(RobotBase):
             from .go2 import Go2Backend
 
             return Go2Backend(config=self._config, **hardware_config)
+        elif robot_type == "g1":
+            from .g1 import G1Backend
+
+            return G1Backend(config=self._config, **hardware_config)
         else:
+            # Fallback to driver registry
+            try:
+                from ..drivers import get_driver
+
+                driver_cls = get_driver(robot_type)
+                if driver_cls is not None:
+                    return driver_cls(config=self._config, **hardware_config)
+            except ImportError:
+                pass
             raise ValueError(f"Unknown robot type: {robot_type}")
 
     @property
