@@ -8,7 +8,6 @@ from dataclasses import dataclass
 
 import serial
 
-
 HDR = b"\xff\xff"
 INST_PING = 0x01
 INST_WRITE = 0x03

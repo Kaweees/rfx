@@ -13,8 +13,8 @@ if TORCH_AVAILABLE:
 else:
     torch = None
 
-from rfx import Robot, RobotBase, SimRobot, MockRobot, RobotConfig
-from rfx.utils import pad_state, pad_action, unpad_action
+from rfx import MockRobot, Robot, RobotConfig, SimRobot  # noqa: E402
+from rfx.utils import pad_state, unpad_action  # noqa: E402
 
 
 class TestMockRobot:

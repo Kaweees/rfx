@@ -4,16 +4,13 @@ from __future__ import annotations
 
 import time
 
-import pytest
-
-from rfx.teleop.transport import InprocTransport
 from rfx.teleop.service import (
     ServiceClient,
     ServiceRequest,
     ServiceResponse,
     ServiceServer,
 )
-
+from rfx.teleop.transport import InprocTransport
 
 # ---------------------------------------------------------------------------
 # ServiceResponse constructors

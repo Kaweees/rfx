@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from unittest.mock import MagicMock
-
 import pytest
 
 import rfx.teleop.transport as transport_mod
@@ -151,7 +148,7 @@ def test_zenoh_roundtrip_integration() -> None:
     """Full pub/sub roundtrip through the real Zenoh backend."""
     transport = transport_mod.ZenohTransport()
     sub = transport.subscribe("integration/test/**")
-    env = transport.publish(
+    transport.publish(
         "integration/test/hello",
         b"world",
         metadata={"robot": "so101"},

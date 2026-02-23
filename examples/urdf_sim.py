@@ -6,6 +6,7 @@ Load any robot from URDF and simulate it.
 """
 
 import argparse
+
 import rfx
 
 
@@ -35,7 +36,7 @@ def main():
 
         if step % 25 == 0:
             q = obs["state"][0, : model.num_actuated].tolist()
-            fk = model.forward_kinematics(q)
+            model.forward_kinematics(q)
 
             # Print end-effector / foot positions
             leaf_links = [

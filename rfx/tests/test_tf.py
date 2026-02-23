@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 import json
-import time
 
 import pytest
 
+from rfx.teleop.transport import InprocTransport
 from rfx.tf import (
     TransformBroadcaster,
     TransformBuffer,
     TransformStamped,
 )
-from rfx.teleop.transport import InprocTransport
-
 
 # ---------------------------------------------------------------------------
 # TransformStamped creation and serialization

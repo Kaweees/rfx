@@ -8,12 +8,8 @@ via the InprocTransport pub/sub mechanism.
 from __future__ import annotations
 
 import json
-import time
-
-import pytest
 
 from rfx.teleop.transport import InprocTransport
-
 
 # ---------------------------------------------------------------------------
 # Simple node registry pattern

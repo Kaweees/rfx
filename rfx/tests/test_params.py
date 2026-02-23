@@ -8,12 +8,8 @@ and parameter change notification via transport subscription.
 from __future__ import annotations
 
 import json
-import time
-
-import pytest
 
 from rfx.teleop.transport import InprocTransport
-
 
 # ---------------------------------------------------------------------------
 # Parameter server pattern (Python-level)

@@ -1,16 +1,16 @@
 """Tests for rfx.skills module."""
 
+from collections.abc import Callable
+
 import pytest
-from typing import Any, Callable
 
 from rfx.skills import (
     Skill,
     SkillRegistry,
-    skill,
-    get_global_registry,
-    register_skill,
     _extract_parameters,
     _python_type_to_json_type,
+    get_global_registry,
+    skill,
 )
 
 
@@ -363,10 +363,9 @@ class TestPythonTypeToJsonType:
 
     def test_generic_types(self) -> None:
         """Test generic type conversion."""
-        from typing import List, Dict
 
-        assert _python_type_to_json_type(List[int]) == "array"
-        assert _python_type_to_json_type(Dict[str, int]) == "object"
+        assert _python_type_to_json_type(list[int]) == "array"
+        assert _python_type_to_json_type(dict[str, int]) == "object"
 
     def test_unknown_type(self) -> None:
         """Test unknown types default to string."""

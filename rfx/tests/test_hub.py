@@ -10,14 +10,13 @@ import pytest
 tinygrad = pytest.importorskip("tinygrad")
 torch = pytest.importorskip("torch")
 
-from tinygrad import Tensor
-from tinygrad.nn.state import get_state_dict, safe_save
+from tinygrad import Tensor  # noqa: E402
+from tinygrad.nn.state import get_state_dict, safe_save  # noqa: E402
 
-from rfx.config import RobotConfig
-from rfx.hub import LoadedPolicy, inspect_policy, load_policy
-from rfx.nn import MLP, ActorCritic, Policy, _POLICY_REGISTRY
-from rfx.utils.transforms import ObservationNormalizer
-
+from rfx.config import RobotConfig  # noqa: E402
+from rfx.hub import LoadedPolicy, inspect_policy, load_policy  # noqa: E402
+from rfx.nn import _POLICY_REGISTRY, MLP, ActorCritic, Policy  # noqa: E402
+from rfx.utils.transforms import ObservationNormalizer  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # 1. Save / load round-trip

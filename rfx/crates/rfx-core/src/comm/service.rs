@@ -60,7 +60,6 @@ impl ServiceStatus {
             Self::Canceled => "canceled",
         }
     }
-
 }
 
 impl std::str::FromStr for ServiceStatus {
@@ -400,7 +399,10 @@ mod zenoh_service {
         fn into_response(self) -> ServiceResponse {
             ServiceResponse {
                 request_id: self.request_id,
-                status: self.status.parse::<ServiceStatus>().unwrap_or(ServiceStatus::Error),
+                status: self
+                    .status
+                    .parse::<ServiceStatus>()
+                    .unwrap_or(ServiceStatus::Error),
                 error_code: self.error_code,
                 error_message: self.error_message,
                 payload: base64_decode(&self.payload),

@@ -3,13 +3,9 @@
 from __future__ import annotations
 
 import json
-import time
 
-import pytest
-
-from rfx.teleop.transport import InprocTransport, TransportEnvelope
 from rfx.teleop.service import ServiceRequest, ServiceResponse
-
+from rfx.teleop.transport import InprocTransport
 
 # ---------------------------------------------------------------------------
 # Envelope metadata key injection

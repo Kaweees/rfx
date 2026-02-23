@@ -5,11 +5,8 @@ from __future__ import annotations
 import threading
 import time
 
-import pytest
-
 from rfx.runtime.health import HealthMonitor, ReconnectPolicy, Watchdog
 from rfx.teleop.transport import InprocTransport
-
 
 # ---------------------------------------------------------------------------
 # Watchdog

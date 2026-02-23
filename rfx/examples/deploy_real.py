@@ -40,7 +40,6 @@ import torch.nn as nn
 import rfx
 from rfx.config import SO101_CONFIG
 
-
 # -------------------------------------------------------------------
 # 1. Define your policy
 #

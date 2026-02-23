@@ -9,7 +9,6 @@ import pytest
 import rfx.drivers as drivers_mod
 from rfx.drivers import get_driver, list_drivers, register_driver
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

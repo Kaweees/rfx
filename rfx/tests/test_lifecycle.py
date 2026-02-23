@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
-
-from rfx.runtime.node import NodeContext
 from rfx.runtime.lifecycle import (
     LifecycleState,
     LifecycleTransition,
     ManagedNode,
 )
+from rfx.runtime.node import NodeContext
 from rfx.teleop.transport import InprocTransport
 
 
