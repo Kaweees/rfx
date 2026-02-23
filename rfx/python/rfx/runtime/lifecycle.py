@@ -10,7 +10,6 @@ from __future__ import annotations
 import enum
 import logging
 import time
-from typing import Any
 
 from .node import Node, NodeContext
 

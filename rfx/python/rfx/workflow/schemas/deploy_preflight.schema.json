@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rfx.dev/schemas/deploy_preflight.schema.json",
+  "title": "rfx Deploy Preflight Report",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "allowed",
+    "errors"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "artifact_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "allowed": {
+      "type": "boolean"
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

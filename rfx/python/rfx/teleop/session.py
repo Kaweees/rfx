@@ -5,15 +5,18 @@ rfx.teleop.session - High-rate SO-101 teleoperation runtime.
 from __future__ import annotations
 
 import json
+import os
 import threading
 import time
 from collections import deque
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol
 
 import numpy as np
 
+from ..runtime.otel import flush_otel, get_tracer, init_otel
 from .config import ArmPairConfig, CameraStreamConfig, TeleopSessionConfig
 from .recorder import LeRobotRecorder, RecordedEpisode
 from .transport import TransportLike, create_transport
@@ -58,26 +61,53 @@ class ArmPair(Protocol):
 
 
 class _So101ArmPair:
-    """Default SO-101 leader/follower arm pair implementation."""
+    """SO-101 leader/follower arm pair using the universal Zenoh pipeline.
 
-    def __init__(self, pair: ArmPairConfig) -> None:
-        from ..config import SO101_CONFIG
+    Both arms are RobotNodes on a shared Rust transport.  The leader
+    publishes state at 50 Hz; ``step()`` reads the latest state and sends
+    it as a command to the follower — all through the transport, never
+    touching serial from Python.
+    """
+
+    def __init__(self, pair: ArmPairConfig, **kwargs: Any) -> None:
         from ..real.so101 import So101Backend
 
         self.name = pair.name
-        self._leader = So101Backend(config=SO101_CONFIG, port=pair.leader_port, is_leader=True)
-        self._follower = So101Backend(config=SO101_CONFIG, port=pair.follower_port, is_leader=False)
+
+        # Create a shared Rust transport for both RobotNodes.
+        # Default to in-process transport for local teleop reliability.
+        # Set RFX_TELEOP_NODE_TRANSPORT=zenoh to force Zenoh bus.
+        transport_mode = os.getenv("RFX_TELEOP_NODE_TRANSPORT", "inproc").strip().lower()
+        if transport_mode == "zenoh":
+            from .. import node as _node_mod
+
+            rust_transport = _node_mod.auto_transport()
+        else:
+            from rfx._rfx import Transport as _RustTransport
+
+            rust_transport = _RustTransport()
+
+        from ..robot.config import SO101_CONFIG
+
+        self._leader = So101Backend(
+            config=SO101_CONFIG,
+            port=pair.leader_port,
+            is_leader=True,
+            transport=rust_transport,
+            name=f"{pair.name}-leader",
+        )
+        self._follower = So101Backend(
+            config=SO101_CONFIG,
+            port=pair.follower_port,
+            is_leader=False,
+            transport=rust_transport,
+            name=f"{pair.name}-follower",
+        )
 
     def step(self) -> Sequence[float]:
-        try:
-            import torch
-        except ModuleNotFoundError as exc:
-            raise RuntimeError("torch is required for SO-101 teleoperation sessions") from exc
-
         positions = self._leader.read_positions()
-        padded = torch.zeros(1, self._follower.config.max_action_dim, dtype=positions.dtype)
-        padded[0, : positions.shape[0]] = positions
-        self._follower.act(padded)
+        # Send positions directly through the follower's node (via transport)
+        self._follower.node.send_command(positions.tolist())
         return [float(v) for v in positions.tolist()]
 
     def go_home(self) -> None:
@@ -202,13 +232,19 @@ class BimanualSo101Session:
         config: TeleopSessionConfig,
         *,
         recorder: LeRobotRecorder | None = None,
+        collection_recorder: Any | None = None,
         pair_factory: Callable[[ArmPairConfig], ArmPair] | None = None,
         transport: TransportLike | None = None,
     ) -> None:
         self.config = config
         self.recorder = recorder or LeRobotRecorder(config.output_dir)
+        self._collection_recorder = collection_recorder
         self._pair_factory = pair_factory or _So101ArmPair
         self.transport = transport or create_transport(config.transport)
+        init_otel(service_name="rfx-teleop")
+        self._tracer = get_tracer("rfx.teleop.session")
+        self._otel_sample_every = max(1, int(os.getenv("RFX_OTEL_SAMPLE_EVERY", "100")))
+        self._trace_every = max(0, int(os.getenv("RFX_TELEOP_TRACE_EVERY", "0")))
 
         self._pairs: list[ArmPair] = []
         self._camera_workers: list[_CameraWorker] = []
@@ -276,44 +312,50 @@ class BimanualSo101Session:
     def start(self) -> None:
         if self.is_running:
             return
+        with self._tracer.start_as_current_span("teleop.start") as span:
+            span.set_attribute("rate_hz", float(self.config.rate_hz))
+            span.set_attribute("arm_pairs", len(self.config.arm_pairs))
 
-        self._pairs = [self._pair_factory(pair_config) for pair_config in self.config.arm_pairs]
-        self._loop_error = None
+            self._pairs = [self._pair_factory(pair_config) for pair_config in self.config.arm_pairs]
+            self._loop_error = None
 
-        self._camera_workers = [
-            _CameraWorker(camera_config, frame_callback=self._on_camera_frame)
-            for camera_config in self.config.cameras
-        ]
-        for worker in self._camera_workers:
-            worker.start()
+            self._camera_workers = [
+                _CameraWorker(camera_config, frame_callback=self._on_camera_frame)
+                for camera_config in self.config.cameras
+            ]
+            for worker in self._camera_workers:
+                worker.start()
 
-        self._running.set()
-        self._control_thread = threading.Thread(
-            target=self._control_loop,
-            name="teleop-control-loop",
-            daemon=True,
-        )
-        self._control_thread.start()
+            self._running.set()
+            self._control_thread = threading.Thread(
+                target=self._control_loop,
+                name="teleop-control-loop",
+                daemon=True,
+            )
+            self._control_thread.start()
 
     def stop(self) -> None:
         if not self.is_running and self._control_thread is None:
             return
+        with self._tracer.start_as_current_span("teleop.stop") as span:
+            span.set_attribute("recording_active", bool(self.is_recording))
 
-        if self.is_recording:
-            self.stop_recording()
+            if self.is_recording:
+                self.stop_recording()
 
-        self._running.clear()
-        if self._control_thread is not None:
-            self._control_thread.join(timeout=2.0)
-            self._control_thread = None
+            self._running.clear()
+            if self._control_thread is not None:
+                self._control_thread.join(timeout=2.0)
+                self._control_thread = None
 
-        for worker in self._camera_workers:
-            worker.stop()
-        self._camera_workers = []
+            for worker in self._camera_workers:
+                worker.stop()
+            self._camera_workers = []
 
-        for pair in self._pairs:
-            pair.disconnect()
-        self._pairs = []
+            for pair in self._pairs:
+                pair.disconnect()
+            self._pairs = []
+            flush_otel()
 
     def go_home(self) -> None:
         for pair in self._pairs:
@@ -428,15 +470,23 @@ class BimanualSo101Session:
             loop_start = time.perf_counter()
             dt = loop_start - last_loop_start
             last_loop_start = loop_start
+            should_trace_tick = (self._iterations % self._otel_sample_every) == 0
+            span_ctx = self._tracer.start_as_current_span("teleop.tick") if should_trace_tick else None
 
             try:
-                pair_positions: dict[str, tuple[float, ...]] = {}
-                for pair in self._pairs:
-                    values = tuple(float(v) for v in pair.step())
-                    pair_positions[pair.name] = values
+                if span_ctx is not None:
+                    with span_ctx as span:
+                        span.set_attribute("dt_s", float(dt))
+                        span.set_attribute("overruns", int(self._overruns))
+                        pair_positions = self._step_pairs()
+                else:
+                    pair_positions = self._step_pairs()
             except Exception as exc:
                 self._loop_error = exc
                 self._running.clear()
+                with self._tracer.start_as_current_span("teleop.loop_error") as span:
+                    span.set_attribute("error_type", type(exc).__name__)
+                    span.add_event("control_loop_exception", {"message": str(exc)})
                 break
 
             timestamp_ns = time.time_ns()
@@ -461,11 +511,17 @@ class BimanualSo101Session:
                     pair_positions=pair_positions,
                     camera_frame_indices=camera_indices,
                 )
+                if self._collection_recorder is not None:
+                    state = np.concatenate(
+                        [np.asarray(v, dtype=np.float32) for v in pair_positions.values()]
+                    )
+                    self._collection_recorder.add_frame(state=state)
             self._publish_pair_positions(
                 pair_positions=pair_positions,
                 camera_indices=camera_indices,
                 timestamp_ns=timestamp_ns,
             )
+            self._maybe_log_live_trace(pair_positions=pair_positions, dt_s=dt)
 
             next_deadline += target_period
             sleep_s = next_deadline - time.perf_counter()
@@ -479,6 +535,27 @@ class BimanualSo101Session:
                     pass
             else:
                 next_deadline = time.perf_counter()
+
+    def _maybe_log_live_trace(self, *, pair_positions: Mapping[str, Sequence[float]], dt_s: float) -> None:
+        if self._trace_every <= 0:
+            return
+        if (self._iterations % self._trace_every) != 0:
+            return
+        compact = {
+            pair_name: [round(float(v), 4) for v in values[:6]]
+            for pair_name, values in pair_positions.items()
+        }
+        print(
+            f"teleop.live dt={dt_s:.4f}s overruns={self._overruns} cmd={compact}",
+            flush=True,
+        )
+
+    def _step_pairs(self) -> dict[str, tuple[float, ...]]:
+        pair_positions: dict[str, tuple[float, ...]] = {}
+        for pair in self._pairs:
+            values = tuple(float(v) for v in pair.step())
+            pair_positions[pair.name] = values
+        return pair_positions
 
     def _publish_pair_positions(
         self,
@@ -536,3 +613,343 @@ class BimanualSo101Session:
 
     def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
         self.stop()
+
+    def run(self) -> None:
+        """Run teleop until Ctrl+C using this session's arm configuration."""
+        self.start()
+        print("Starting teleoperation. Press Ctrl+C to stop.")
+        try:
+            while True:
+                self.check_health()
+                time.sleep(0.25)
+        except KeyboardInterrupt:
+            print("\nStopping.")
+        finally:
+            self.stop()
+
+
+class So101TeleopSession(BimanualSo101Session):
+    """Generic SO-101 teleop session.
+
+    Name keeps UX simple: use one session class for single-pair today, and
+    multiple pairs later by changing session config only.
+    """
+
+
+@dataclass(frozen=True)
+class SessionVars:
+    """Run-level settings shared by teleop/sim session wrappers."""
+
+    rate_hz: float | None = None
+    duration_s: float | None = None
+    output_dir: str | Path | None = None
+    cameras: tuple[CameraStreamConfig, ...] | None = None
+    transport: Any | None = None
+    jit: Any | None = None
+    warmup_s: float = 0.5
+
+
+@dataclass(frozen=True)
+class DataVars:
+    """Data collection policy attached to a session run."""
+
+    enabled: bool = False
+    duration_s: float | None = None
+    label: str | None = None
+    metadata: Mapping[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class TelemetryVars:
+    """Observability settings applied before session execution."""
+
+    otel: bool = False
+    exporter: str = "console"
+    sample_every: int = 100
+    live_trace_every: int = 0
+    otlp_endpoint: str | None = None
+
+
+@dataclass(frozen=True)
+class SimSpec:
+    """Simulation robot spec for session.run."""
+
+    config: str | Path | Mapping[str, Any]
+    num_envs: int = 1
+    backend: str = "mock"
+    device: str | None = None
+    policy: Callable[[dict[str, Any]], Any] | None = None
+
+
+def config(
+    *,
+    rate_hz: float | None = 50.0,
+    duration_s: float | None = None,
+    output_dir: str | Path | None = None,
+    cameras: Sequence[CameraStreamConfig] | None = None,
+    transport: Any | None = None,
+    jit: Any | None = None,
+    warmup_s: float = 0.5,
+) -> SessionVars:
+    return SessionVars(
+        rate_hz=rate_hz,
+        duration_s=duration_s,
+        output_dir=output_dir,
+        cameras=tuple(cameras) if cameras is not None else None,
+        transport=transport,
+        jit=jit,
+        warmup_s=warmup_s,
+    )
+
+
+def data(
+    *,
+    enabled: bool = True,
+    duration_s: float | None = None,
+    label: str | None = None,
+    metadata: Mapping[str, Any] | None = None,
+) -> DataVars:
+    return DataVars(enabled=enabled, duration_s=duration_s, label=label, metadata=metadata)
+
+
+def telemetry(
+    *,
+    otel: bool = True,
+    exporter: str = "console",
+    sample_every: int = 100,
+    live_trace_every: int = 0,
+    otlp_endpoint: str | None = None,
+) -> TelemetryVars:
+    return TelemetryVars(
+        otel=otel,
+        exporter=exporter,
+        sample_every=sample_every,
+        live_trace_every=live_trace_every,
+        otlp_endpoint=otlp_endpoint,
+    )
+
+
+def sim(
+    config: str | Path | Mapping[str, Any],
+    *,
+    num_envs: int = 1,
+    backend: str = "mock",
+    device: str | None = None,
+    policy: Callable[[dict[str, Any]], Any] | None = None,
+) -> SimSpec:
+    return SimSpec(
+        config=config,
+        num_envs=num_envs,
+        backend=backend,
+        device=device,
+        policy=policy,
+    )
+
+
+def _apply_telemetry(spec: TelemetryVars | None) -> None:
+    if spec is None:
+        return
+    if spec.otel:
+        os.environ["RFX_OTEL"] = "1"
+    os.environ["RFX_OTEL_EXPORTER"] = str(spec.exporter)
+    os.environ["RFX_OTEL_SAMPLE_EVERY"] = str(max(1, int(spec.sample_every)))
+    os.environ["RFX_TELEOP_TRACE_EVERY"] = str(max(0, int(spec.live_trace_every)))
+    if spec.otlp_endpoint:
+        os.environ["RFX_OTEL_OTLP_ENDPOINT"] = str(spec.otlp_endpoint)
+
+
+def _parse_profiles(
+    variables: Any | None,
+    profiles: Sequence[Any],
+    kwargs: Mapping[str, Any],
+) -> tuple[SessionVars, DataVars, TelemetryVars | None]:
+    session_spec = SessionVars()
+    data_spec = DataVars()
+    telemetry_spec: TelemetryVars | None = None
+
+    inputs: list[Any] = []
+    if variables is not None:
+        inputs.append(variables)
+    inputs.extend(profiles)
+    for item in inputs:
+        if isinstance(item, SessionVars):
+            session_spec = item
+        elif isinstance(item, DataVars):
+            data_spec = item
+        elif isinstance(item, TelemetryVars):
+            telemetry_spec = item
+        elif isinstance(item, Mapping):
+            session_spec = SessionVars(**dict(item))
+
+    if kwargs:
+        merged = dict(session_spec.__dict__)
+        merged.update(kwargs)
+        session_spec = SessionVars(**merged)
+    return session_spec, data_spec, telemetry_spec
+
+
+def _run_teleop(
+    arm_pairs: tuple[ArmPairConfig, ...],
+    session_spec: SessionVars,
+    data_spec: DataVars,
+    telemetry_spec: TelemetryVars | None,
+) -> RecordedEpisode | None:
+    _apply_telemetry(telemetry_spec)
+    cfg_kwargs: dict[str, Any] = {"arm_pairs": arm_pairs}
+    if session_spec.rate_hz is not None:
+        cfg_kwargs["rate_hz"] = session_spec.rate_hz
+    if session_spec.output_dir is not None:
+        cfg_kwargs["output_dir"] = Path(session_spec.output_dir)
+    if session_spec.cameras is not None:
+        cfg_kwargs["cameras"] = session_spec.cameras
+    if session_spec.transport is not None:
+        cfg_kwargs["transport"] = session_spec.transport
+    if session_spec.jit is not None:
+        cfg_kwargs["jit"] = session_spec.jit
+
+    sess = BimanualSo101Session(config=TeleopSessionConfig(**cfg_kwargs))
+    if data_spec.enabled:
+        duration = data_spec.duration_s if data_spec.duration_s is not None else session_spec.duration_s
+        if duration is not None:
+            return sess.record_episode(
+                duration_s=float(duration),
+                label=data_spec.label,
+                metadata=data_spec.metadata,
+            )
+        sess.start()
+        episode = sess.start_recording(label=data_spec.label, metadata=data_spec.metadata)
+        print(f"Recording episode {episode}. Press Ctrl+C to stop.")
+        try:
+            while True:
+                sess.check_health()
+                time.sleep(0.25)
+        except KeyboardInterrupt:
+            print("\nStopping.")
+        finally:
+            recorded = sess.stop_recording()
+            sess.stop()
+        return recorded
+
+    if session_spec.duration_s is not None:
+        sess.record_episode(duration_s=float(session_spec.duration_s), label="session-run")
+        return None
+    sess.run()
+    return None
+
+
+def _run_sim_session(
+    spec: SimSpec,
+    session_spec: SessionVars,
+) -> dict[str, float | int]:
+    from ..session import Session as RuntimeSession
+    from ..sim.base import SimRobot
+
+    robot = SimRobot(
+        spec.config,
+        num_envs=spec.num_envs,
+        backend=spec.backend,
+        device=spec.device or "cpu",
+    )
+
+    policy = spec.policy
+    if policy is None:
+        import torch
+
+        def _zero_policy(_obs: dict[str, Any]) -> torch.Tensor:
+            return torch.zeros((robot.num_envs, robot.max_action_dim), device=robot.device)
+
+        policy = _zero_policy
+
+    runtime = RuntimeSession(
+        robot=robot,
+        policy=policy,
+        rate_hz=float(session_spec.rate_hz or 50.0),
+        warmup_s=float(session_spec.warmup_s),
+    )
+    runtime.run(duration=session_spec.duration_s)
+    return runtime.stats.to_dict()
+
+
+def run(
+    arm: ArmPairConfig | Sequence[ArmPairConfig],
+    *,
+    logging: bool = False,
+    rate_hz: float | None = None,
+    duration_s: float | None = None,
+    cameras: Sequence[CameraStreamConfig] | None = None,
+    transport: Any | None = None,
+    data_output: str | Path | None = None,
+    lineage: str | None = None,
+    scale: str | None = None,
+    format: str = "native",
+    metadata: Mapping[str, Any] | None = None,
+    otel: bool = False,
+    otel_exporter: str = "console",
+    otel_sample_every: int = 100,
+    otlp_endpoint: str | None = None,
+) -> RecordedEpisode | dict[str, Any] | None:
+    """Run a teleop session.
+
+    Only ``arm`` is required. Everything else controls run behavior:
+    - logging: live per-loop movement trace in terminal
+    - data_output: enable recording to this directory
+    - lineage/scale/format: run metadata + export format
+    """
+    if isinstance(arm, ArmPairConfig):
+        arm_pairs = (arm,)
+    else:
+        arm_pairs = tuple(arm)
+        if not arm_pairs:
+            raise ValueError("arm list cannot be empty")
+
+    run_metadata: dict[str, Any] = dict(metadata or {})
+    if lineage is not None:
+        run_metadata["lineage"] = lineage
+    if scale is not None:
+        run_metadata["scale"] = scale
+    run_metadata["format"] = format
+
+    session_spec = SessionVars(
+        rate_hz=rate_hz,
+        duration_s=duration_s,
+        output_dir=data_output,
+        # Beginner default: teleop without camera workers unless explicitly requested.
+        cameras=tuple(cameras) if cameras is not None else (),
+        transport=transport,
+    )
+    data_enabled = data_output is not None
+    data_spec = DataVars(
+        enabled=data_enabled,
+        duration_s=duration_s,
+        label="session-run",
+        metadata=run_metadata if data_enabled else None,
+    )
+    telemetry_spec = TelemetryVars(
+        otel=otel,
+        exporter=otel_exporter,
+        sample_every=otel_sample_every,
+        live_trace_every=1 if logging else 0,
+        otlp_endpoint=otlp_endpoint,
+    )
+
+    episode = _run_teleop(arm_pairs, session_spec, data_spec, telemetry_spec)
+    if episode is None:
+        return None
+
+    export_format = format.strip().lower()
+    if export_format in {"native", "raw"}:
+        return episode
+    if export_format == "mcap":
+        return LeRobotRecorder(data_output or episode.episode_dir.parent).export_episode_to_mcap(
+            episode,
+            output_dir=data_output or Path("mcap_exports"),
+        )
+    if export_format == "lerobot":
+        repo_id = lineage or "local/rfx-session"
+        return LeRobotRecorder(data_output or episode.episode_dir.parent).export_episode_to_lerobot(
+            episode,
+            repo_id=repo_id,
+            root=data_output or Path("lerobot_datasets"),
+            push_to_hub=False,
+        )
+    raise ValueError("format must be one of: native, mcap, lerobot")

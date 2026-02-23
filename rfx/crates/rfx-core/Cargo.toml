@@ -6,7 +6,7 @@ license.workspace = true
 description = "Core Rust library for rfx robotics framework"
 
 [features]
-default = ["hardware-go2", "hardware-so101"]
+default = ["hardware-go2", "hardware-so101", "zenoh"]
 # Native CycloneDDS backend (requires system library)
 dds-cyclone = []
 hardware-go2 = ["dep:dust_dds", "dep:crc32fast"]

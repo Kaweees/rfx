@@ -148,8 +148,13 @@ mod tests {
         assert_eq!(meta["_schema_version"], "1.0");
 
         // Subscriber should also see the metadata
-        let got = sub.recv_timeout(std::time::Duration::from_millis(100)).unwrap();
-        assert_eq!(envelope_type_name(&got).as_deref(), Some("rfx.msg.JointState"));
+        let got = sub
+            .recv_timeout(std::time::Duration::from_millis(100))
+            .unwrap();
+        assert_eq!(
+            envelope_type_name(&got).as_deref(),
+            Some("rfx.msg.JointState")
+        );
     }
 
     #[test]

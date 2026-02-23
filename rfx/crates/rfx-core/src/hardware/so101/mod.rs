@@ -40,6 +40,7 @@ use serialport::SerialPort;
 
 use arrayvec::ArrayVec;
 
+use crate::hardware::{Command, Robot, RobotState};
 use crate::Error;
 use serial::{radians_to_raw, raw_to_radians, FeetechProtocol, SERVO_IDS};
 use types::TimingState;
@@ -119,6 +120,18 @@ impl So101 {
             }
         }
 
+        // Apply leader/follower torque profile immediately after connect.
+        // Leader should be backdrivable for teleop input; follower should hold targets.
+        let torque_enabled = !arm.config.is_leader;
+        if let Err(e) = arm.set_torque_enable(torque_enabled) {
+            tracing::warn!(
+                "Failed to set torque={} on {}: {}",
+                torque_enabled,
+                arm.config.port,
+                e
+            );
+        }
+
         tracing::info!("SO-101 connected successfully");
         Ok(arm)
     }
@@ -131,6 +144,7 @@ impl So101 {
     ) {
         let mut timing = TimingState::new();
         let start_time = Instant::now();
+        let mut read_failures: u64 = 0;
 
         while running.load(Ordering::Relaxed) {
             let loop_start = Instant::now();
@@ -142,6 +156,7 @@ impl So101 {
             };
 
             if let Ok(raw_positions) = positions {
+                read_failures = 0;
                 let now = Instant::now();
                 let timestamp = start_time.elapsed().as_secs_f64();
 
@@ -174,6 +189,15 @@ impl So101 {
                 state.joint_positions = joint_positions;
                 state.joint_velocities = joint_velocities;
                 state.timestamp = timestamp;
+            } else if let Err(e) = positions {
+                read_failures = read_failures.saturating_add(1);
+                if read_failures % 25 == 0 {
+                    tracing::warn!(
+                        "SO-101 read_positions failing ({} consecutive): {}",
+                        read_failures,
+                        e
+                    );
+                }
             }
 
             // Sleep for remaining time in interval
@@ -262,6 +286,51 @@ impl So101 {
 
         tracing::info!("SO-101 disconnected");
         Ok(())
+    }
+}
+
+impl Robot for So101 {
+    fn state(&self) -> RobotState {
+        let s = self.state.read();
+        let mut rs = RobotState::new(NUM_JOINTS);
+        for i in 0..NUM_JOINTS {
+            rs.joint_positions[i] = s.joint_positions[i] as f64;
+            rs.joint_velocities[i] = s.joint_velocities[i] as f64;
+        }
+        rs.timestamp = s.timestamp;
+        rs
+    }
+
+    fn send_command(&self, cmd: Command) -> crate::Result<()> {
+        if let Some(positions) = cmd.positions {
+            let f32_positions: Vec<f32> = positions.iter().map(|&p| p as f32).collect();
+            self.set_positions(&f32_positions)?;
+        }
+        Ok(())
+    }
+
+    fn num_joints(&self) -> usize {
+        NUM_JOINTS
+    }
+
+    fn name(&self) -> &str {
+        if self.config.is_leader {
+            "so101-leader"
+        } else {
+            "so101-follower"
+        }
+    }
+
+    fn is_ready(&self) -> bool {
+        self.is_connected()
+    }
+
+    fn emergency_stop(&self) -> crate::Result<()> {
+        self.set_torque_enable(false)
+    }
+
+    fn reset(&self) -> crate::Result<()> {
+        self.go_home()
     }
 }
 

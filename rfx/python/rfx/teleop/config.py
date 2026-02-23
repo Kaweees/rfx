@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
 from typing import Any, Literal, cast
 
-TransportBackend = Literal["inproc", "zenoh", "dds"]
+TransportBackend = Literal["inproc", "zenoh", "hybrid"]
 JitBackend = Literal["auto", "cpu", "cuda", "metal"]
 
 
@@ -44,13 +44,30 @@ class ZenohConfig:
 
 
 @dataclass(frozen=True)
+class HybridConfig:
+    """Hybrid policy: local shared-memory path + Zenoh control-plane."""
+
+    # Keys matching these patterns remain local-only.
+    local_only_patterns: tuple[str, ...] = ("data/**",)
+    # Keys matching these patterns are mirrored to/from Zenoh.
+    zenoh_required_patterns: tuple[str, ...] = ("control/**", "rfx/**")
+    # Backward-compatible alias for older configs/tests.
+    control_patterns: tuple[str, ...] = (
+        "rfx/**",
+        "teleop/control/**",
+        "teleop/service/**",
+    )
+
+
+@dataclass(frozen=True)
 class TransportConfig:
     """Transport behavior for teleop runtime paths."""
 
-    backend: TransportBackend = "inproc"
+    backend: TransportBackend = "zenoh"
     zero_copy_hot_path: bool = True
     queue_capacity: int = 1024
     zenoh: ZenohConfig | None = None
+    hybrid: HybridConfig | None = None
 
 
 @dataclass(frozen=True)

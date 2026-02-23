@@ -18,10 +18,10 @@ class TestControlLoopDecorator:
             """Test policy."""
             return state
 
-        assert hasattr(my_policy, "_pi_control_loop")
-        assert my_policy._pi_control_loop is True
-        assert my_policy._pi_rate_hz == 500.0
-        assert my_policy._pi_name == "my_policy"
+        assert hasattr(my_policy, "_rfx_control_loop")
+        assert my_policy._rfx_control_loop is True
+        assert my_policy._rfx_rate_hz == 500.0
+        assert my_policy._rfx_name == "my_policy"
 
     def test_control_loop_custom_rate(self) -> None:
         """Test decorator with custom rate."""
@@ -31,7 +31,7 @@ class TestControlLoopDecorator:
             """Fast policy."""
             return state
 
-        assert fast_policy._pi_rate_hz == 1000.0
+        assert fast_policy._rfx_rate_hz == 1000.0
 
     def test_control_loop_custom_name(self) -> None:
         """Test decorator with custom name."""
@@ -41,7 +41,7 @@ class TestControlLoopDecorator:
             """Balance policy."""
             return state
 
-        assert my_policy._pi_name == "balance"
+        assert my_policy._rfx_name == "balance"
 
     def test_control_loop_preserves_function(self) -> None:
         """Test that decorated function still works."""
@@ -86,10 +86,10 @@ class TestPolicyDecorator:
             """Test policy."""
             return state
 
-        assert hasattr(my_policy, "_pi_policy")
-        assert my_policy._pi_policy is True
-        assert my_policy._pi_model is None
-        assert my_policy._pi_jit is False
+        assert hasattr(my_policy, "_rfx_policy")
+        assert my_policy._rfx_policy is True
+        assert my_policy._rfx_model is None
+        assert my_policy._rfx_jit is False
 
     def test_policy_with_model_raises(self) -> None:
         """Test that specifying model raises NotImplementedError."""
@@ -110,7 +110,7 @@ class TestPolicyDecorator:
             """JIT policy."""
             return state
 
-        assert jit_policy._pi_jit is True
+        assert jit_policy._rfx_jit is True
 
     def test_policy_preserves_function(self) -> None:
         """Test that decorated function still works (when no model)."""

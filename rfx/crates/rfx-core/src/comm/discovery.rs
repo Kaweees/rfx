@@ -107,8 +107,8 @@ pub trait DiscoveryBackend: Send + Sync {
 /// In-process discovery — immediate, no TTL needed.
 pub struct InprocDiscovery {
     nodes: RwLock<HashSet<String>>,
-    publishers: RwLock<HashMap<String, HashSet<String>>>,  // topic -> nodes
-    subscribers: RwLock<HashMap<String, HashSet<String>>>,  // topic -> nodes
+    publishers: RwLock<HashMap<String, HashSet<String>>>, // topic -> nodes
+    subscribers: RwLock<HashMap<String, HashSet<String>>>, // topic -> nodes
     callbacks: RwLock<Vec<Arc<dyn Fn(DiscoveryEvent) + Send + Sync>>>,
 }
 
@@ -270,8 +270,8 @@ mod zenoh_discovery {
 
         /// Prune entries older than stale_ttl_s.
         pub fn prune_stale(&self) {
-            let cutoff = Instant::now()
-                - std::time::Duration::from_secs_f64(self.config.stale_ttl_s);
+            let cutoff =
+                Instant::now() - std::time::Duration::from_secs_f64(self.config.stale_ttl_s);
 
             let mut nodes = self.nodes.write();
             let before = nodes.len();

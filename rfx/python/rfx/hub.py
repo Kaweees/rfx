@@ -26,8 +26,8 @@ def load_policy(source: str | Path) -> LoadedPolicy:
     Returns:
         LoadedPolicy with .policy, .robot_config, .normalizer, .config
     """
-    from .config import RobotConfig
     from .nn import Policy
+    from .robot.config import RobotConfig
     from .utils.transforms import ObservationNormalizer
 
     path = _resolve_source(source)

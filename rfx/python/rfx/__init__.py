@@ -1,28 +1,10 @@
-"""
-rfx: The PyTorch for Robots
-
-Three methods. That's it.
-
-    >>> robot = rfx.SimRobot.from_config("so101.yaml", num_envs=4096)
-    >>> obs = robot.observe()           # Dict[str, Tensor]
-    >>> robot.act(action)               # Execute action
-    >>> obs = robot.reset()             # Reset
-
-Real robot - same interface:
-
-    >>> robot = rfx.RealRobot.from_config("so101.yaml", port="/dev/ttyACM0")
-    >>> obs = robot.observe()           # (1, 64) tensor
-    >>> robot.act(action)               # Send to hardware
-
-v1 API still supported:
-
-    >>> go2 = rfx.Go2.connect("192.168.123.161")
-    >>> go2.walk(0.5, 0, 0)
-"""
+"""rfx: The PyTorch for Robots."""
 
 from __future__ import annotations
 
-# Import from Rust extension (with fallback for when not built)
+# ---------------------------------------------------------------------------
+# Rust extension (with fallback for when not built)
+# ---------------------------------------------------------------------------
 try:
     from . import _rfx
 
@@ -54,12 +36,10 @@ try:
 
     _RUST_AVAILABLE = True
 except ImportError:
-    # Rust extension not built - provide stubs for pure Python usage
-    __version__ = "0.1.0"
+    __version__ = "0.2.0"
     VERSION = __version__
     _RUST_AVAILABLE = False
 
-    # Placeholder classes for documentation/type hints
     Quaternion = None
     Transform = None
     LowPassFilter = None
@@ -83,237 +63,138 @@ except ImportError:
     SimState = None
     MockSimBackend = None
 
-# ============================================================================
-# rfx v2 API
-# ============================================================================
+# ---------------------------------------------------------------------------
+# Core protocol & modules
+# ---------------------------------------------------------------------------
+from . import jit, node, robot, runtime, utils, workflow  # noqa: E402
+from .agent import Agent  # noqa: E402
+from .decorators import MotorCommands, control_loop, policy  # noqa: E402
+from .hub import LoadedPolicy, inspect_policy, load_policy, push_policy  # noqa: E402
+from .observation import ObservationSpec, make_observation, unpad_action  # noqa: E402
+from .robot import URDF, Robot, RobotBase, RobotConfig, load_config  # noqa: E402
+from .session import Session, SessionStats, run  # noqa: E402
+from .skills import Skill, SkillRegistry, skill  # noqa: E402
 
-from . import jit, utils
-from .config import CameraConfig, JointConfig, RobotConfig, load_config
-from .hub import LoadedPolicy, inspect_policy, load_policy, push_policy
-from .observation import ObservationSpec, make_observation, unpad_action
-from .robot import Robot, RobotBase
-from .session import Session, SessionStats, run
-from .urdf import URDF
-
-# Optional runtime dependencies (torch/camera stacks) are not required for
-# lightweight API/skill usage, so guard these imports.
+# ---------------------------------------------------------------------------
+# Optional: transforms, drivers, hardware, ML, teleop
+# ---------------------------------------------------------------------------
 try:
-    from . import real, sim
-    from .real import RealRobot
-    from .sim import MockRobot, SimRobot
+    from . import tf  # noqa: E402
+    from .tf import TransformBroadcaster, TransformBuffer, TransformListener  # noqa: E402
 except ModuleNotFoundError:
-    SimRobot = None
-    MockRobot = None
-    RealRobot = None
-    sim = None
-    real = None
+    tf = TransformBuffer = TransformBroadcaster = TransformListener = None
 
 try:
-    from .teleop import (
-        ArmPairConfig,
-        BimanualSo101Session,
-        CameraStreamConfig,
-        InprocTransport,
-        JitPolicyConfig,
-        JitterBenchmarkResult,
-        LeRobotExportConfig,
-        LeRobotPackageWriter,
-        LeRobotRecorder,
-        LoopTimingStats,
-        RecordedEpisode,
-        RustSubscription,
-        RustTransport,
-        Subscription,
-        TeleopSessionConfig,
-        TransportConfig,
-        TransportEnvelope,
-        assert_jitter_budget,
-        create_transport,
-        run_jitter_benchmark,
-        rust_transport_available,
-    )
+    from . import drivers  # noqa: E402
+    from .drivers import RobotDriver, get_driver, list_drivers, register_driver  # noqa: E402
 except ModuleNotFoundError:
-    ArmPairConfig = None
-    BimanualSo101Session = None
-    CameraStreamConfig = None
-    InprocTransport = None
-    JitPolicyConfig = None
-    JitterBenchmarkResult = None
-    LeRobotExportConfig = None
-    LeRobotPackageWriter = None
-    LeRobotRecorder = None
-    LoopTimingStats = None
-    RecordedEpisode = None
-    RustSubscription = None
-    RustTransport = None
-    Subscription = None
-    TeleopSessionConfig = None
-    TransportConfig = None
-    TransportEnvelope = None
-    assert_jitter_budget = None
-    create_transport = None
-    rust_transport_available = None
-    run_jitter_benchmark = None
-
-# ============================================================================
-# rfx v2 modules: tf, drivers, viz, nav
-# ============================================================================
+    drivers = RobotDriver = get_driver = list_drivers = register_driver = None
 
 try:
-    from . import tf
-    from .tf import TransformBuffer, TransformBroadcaster, TransformListener
+    from . import real, sim  # noqa: E402
+    from .real import RealRobot  # noqa: E402
+    from .real.so101 import So101Robot  # noqa: E402
+    from .sim import MockRobot, SimRobot  # noqa: E402
+
+    So101 = So101Robot
 except ModuleNotFoundError:
-    tf = None
-    TransformBuffer = None
-    TransformBroadcaster = None
-    TransformListener = None
+    SimRobot = MockRobot = RealRobot = So101Robot = So101 = sim = real = None
 
 try:
-    from . import drivers
-    from .drivers import RobotDriver, get_driver, list_drivers, register_driver
+    from . import envs, nn, rl  # noqa: E402
 except ModuleNotFoundError:
-    drivers = None
-    RobotDriver = None
-    get_driver = None
-    list_drivers = None
-    register_driver = None
+    nn = rl = envs = None
 
 try:
-    from . import viz
+    from . import teleop  # noqa: E402
 except ModuleNotFoundError:
-    viz = None
+    teleop = None
 
 try:
-    from . import nav
+    from . import collection  # noqa: E402
 except ModuleNotFoundError:
-    nav = None
-
-# ============================================================================
-# rfx v1 API (backward compatible)
-# ============================================================================
-
-from .agent import Agent
-from .decorators import MotorCommands, control_loop, policy
-from .providers import (
-    available_providers,
-    use,
-)
-from .providers import (
-    enabled as provider_enabled,
-)
-from .providers import (
-    require as require_provider,
-)
-from .sdk import UniversalRobot, VelocityCommand
-from .sdk import connect as connect_robot
-from .skills import Skill, SkillRegistry, skill
-
-try:
-    from . import envs, nn, rl
-except ModuleNotFoundError:
-    nn = None
-    rl = None
-    envs = None
+    collection = None
 
 __all__ = [
-    # v2 API
+    # Version
+    "__version__",
+    "VERSION",
+    # Core protocol
+    "Agent",
     "LoadedPolicy",
-    "load_policy",
-    "push_policy",
-    "inspect_policy",
-    "URDF",
+    "MotorCommands",
+    "ObservationSpec",
     "Robot",
     "RobotBase",
-    "SimRobot",
-    "MockRobot",
-    "RealRobot",
     "RobotConfig",
-    "CameraConfig",
-    "JointConfig",
-    "load_config",
-    "ObservationSpec",
-    "make_observation",
-    "unpad_action",
     "Session",
     "SessionStats",
-    "run",
-    "sim",
-    "real",
-    "utils",
+    "Skill",
+    "SkillRegistry",
+    "URDF",
+    "control_loop",
+    "inspect_policy",
     "jit",
-    "ArmPairConfig",
-    "BimanualSo101Session",
-    "CameraStreamConfig",
-    "InprocTransport",
-    "JitPolicyConfig",
-    "JitterBenchmarkResult",
-    "LeRobotExportConfig",
-    "LeRobotPackageWriter",
-    "LeRobotRecorder",
-    "LoopTimingStats",
-    "RecordedEpisode",
-    "RustSubscription",
-    "RustTransport",
-    "Subscription",
-    "TeleopSessionConfig",
-    "TransportConfig",
-    "TransportEnvelope",
-    "assert_jitter_budget",
-    "create_transport",
-    "rust_transport_available",
-    "run_jitter_benchmark",
-    # v2 modules
-    "tf",
-    "TransformBuffer",
+    "load_config",
+    "load_policy",
+    "make_observation",
+    "node",
+    "policy",
+    "push_policy",
+    "robot",
+    "run",
+    "runtime",
+    "skill",
+    "unpad_action",
+    "utils",
+    "workflow",
+    # Transforms & drivers
     "TransformBroadcaster",
+    "TransformBuffer",
     "TransformListener",
-    "drivers",
     "RobotDriver",
+    "drivers",
     "get_driver",
     "list_drivers",
     "register_driver",
-    "viz",
-    "nav",
-    # v1 API
-    "__version__",
-    "VERSION",
+    "tf",
+    # Hardware backends
+    "MockRobot",
+    "RealRobot",
+    "SimRobot",
+    "So101",
+    "So101Robot",
+    "real",
+    "sim",
+    # Optional ML
+    "envs",
     "nn",
     "rl",
-    "envs",
-    "Quaternion",
-    "Transform",
-    "LowPassFilter",
-    "Topic",
-    "Pid",
-    "PidConfig",
+    # Teleop
+    "teleop",
+    # Collection
+    "collection",
+    # Rust types
     "ControlLoopHandle",
     "ControlLoopStats",
-    "run_control_loop",
-    "control_loop",
-    "policy",
-    "MotorCommands",
     "Go2",
     "Go2Config",
     "Go2State",
     "ImuState",
-    "MotorState",
-    "MotorCmd",
-    "motor_idx",
     "MOTOR_NAMES",
-    "motor_index_by_name",
+    "MockSimBackend",
+    "MotorCmd",
+    "MotorState",
     "PhysicsConfig",
+    "Pid",
+    "PidConfig",
+    "Quaternion",
     "SimConfig",
     "SimState",
-    "MockSimBackend",
-    "skill",
-    "Skill",
-    "SkillRegistry",
-    "Agent",
-    "connect_robot",
-    "UniversalRobot",
-    "VelocityCommand",
-    "use",
-    "available_providers",
-    "require_provider",
-    "provider_enabled",
+    "Topic",
+    "Transform",
+    "LowPassFilter",
+    "motor_idx",
+    "motor_index_by_name",
+    "run_control_loop",
 ]

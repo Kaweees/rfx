@@ -12,8 +12,10 @@ from dataclasses import dataclass, field
 from fnmatch import fnmatchcase
 from typing import TYPE_CHECKING, Any, Protocol
 
+from ..transport_policy import policy_from_hybrid_config
+
 if TYPE_CHECKING:
-    from .config import TransportConfig
+    from .config import HybridConfig, TransportConfig
 
 _BYTES_LIKE = (bytes, bytearray, memoryview)
 
@@ -167,7 +169,7 @@ class RustSubscription:
 
 class RustTransport:
     """
-    Native Rust-backed keyed transport with the same API shape as `InprocTransport`.
+    Native Rust-backed keyed transport (Zenoh under the hood).
     """
 
     def __init__(self) -> None:
@@ -224,6 +226,8 @@ class ZenohTransport:
         shared_memory: bool = True,
         key_prefix: str = "",
     ) -> None:
+        import os
+
         if _RustTransport is None:
             raise RuntimeError(
                 "Rust transport bindings are unavailable. Build extension with maturin develop."
@@ -233,12 +237,36 @@ class ZenohTransport:
                 "Zenoh support is not compiled in. "
                 "Rebuild with: maturin develop --features 'extension-module,zenoh'"
             )
-        self._inner = _RustTransport.zenoh(
-            list(connect),
-            list(listen),
-            shared_memory,
-            key_prefix,
-        )
+
+        # Respect RFX_ZENOH_SHARED_MEMORY env var (same as auto_transport in node.py).
+        env_shm = os.environ.get("RFX_ZENOH_SHARED_MEMORY")
+        if env_shm is not None:
+            shared_memory = env_shm not in ("0", "false", "no", "off")
+
+        try:
+            self._inner = _RustTransport.zenoh(
+                list(connect),
+                list(listen),
+                shared_memory,
+                key_prefix,
+            )
+        except Exception:
+            if shared_memory:
+                import warnings
+
+                warnings.warn(
+                    "Zenoh shared-memory init failed; falling back to non-SHM transport.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                self._inner = _RustTransport.zenoh(
+                    list(connect),
+                    list(listen),
+                    False,
+                    key_prefix,
+                )
+            else:
+                raise
 
     def subscribe(self, pattern: str, capacity: int = 1024) -> RustSubscription:
         return RustSubscription(self._inner.subscribe(pattern, capacity))
@@ -268,6 +296,121 @@ class ZenohTransport:
     @property
     def subscriber_count(self) -> int:
         return int(self._inner.subscriber_count)
+
+
+class HybridSubscription:
+    """Merged subscription over local hot-path and optional Zenoh control-plane."""
+
+    def __init__(self, subscriptions: list[Any]) -> None:
+        self._subscriptions = subscriptions
+        self.pattern = subscriptions[0].pattern if subscriptions else ""
+
+    def recv(self, timeout_s: float | None = None) -> TransportEnvelope | None:
+        if timeout_s is None:
+            while True:
+                env = self.try_recv()
+                if env is not None:
+                    return env
+                time.sleep(0.001)
+        deadline = time.monotonic() + max(timeout_s, 0.0)
+        while True:
+            env = self.try_recv()
+            if env is not None:
+                return env
+            if time.monotonic() >= deadline:
+                return None
+            time.sleep(0.001)
+
+    def try_recv(self) -> TransportEnvelope | None:
+        for sub in self._subscriptions:
+            try_fn = getattr(sub, "try_recv", None)
+            if try_fn is not None:
+                env = try_fn()
+                if env is not None:
+                    return env
+        return None
+
+    @property
+    def subscriptions(self) -> list[Any]:
+        return list(self._subscriptions)
+
+
+class HybridTransport:
+    """
+    Hybrid transport: shared-memory local path + Zenoh control-plane.
+
+    - Always publishes locally (Rust inproc when available).
+    - Mirrors control-plane keys to Zenoh based on configured patterns.
+    """
+
+    def __init__(self, local: TransportLike, zenoh: ZenohTransport | None, config: HybridConfig) -> None:
+        self._local = local
+        self._zenoh = zenoh
+        self._policy = policy_from_hybrid_config(config)
+
+    def subscribe(self, pattern: str, capacity: int = 1024) -> HybridSubscription:
+        self._policy.validate_key(pattern)
+        subs = [self._local.subscribe(pattern, capacity)]
+        if self._policy.pattern_routes_to_zenoh(pattern):
+            if self._zenoh is None:
+                raise RuntimeError(
+                    f"Zenoh control plane is unavailable for required key pattern {pattern!r}."
+                )
+            subs.append(self._zenoh.subscribe(pattern, capacity))
+        return HybridSubscription(subs)
+
+    def unsubscribe(self, sub: HybridSubscription | Any) -> bool:
+        if isinstance(sub, HybridSubscription):
+            ok = True
+            for inner in sub.subscriptions:
+                ok = bool(self._unsubscribe_one(inner)) and ok
+            return ok
+        return bool(self._unsubscribe_one(sub))
+
+    def _unsubscribe_one(self, sub: Any) -> bool:
+        if hasattr(self._local, "unsubscribe"):
+            try:
+                return bool(self._local.unsubscribe(sub))
+            except Exception:
+                pass
+        if hasattr(self._zenoh, "unsubscribe"):
+            try:
+                return bool(self._zenoh.unsubscribe(sub))
+            except Exception:
+                pass
+        return False
+
+    def publish(
+        self,
+        key: str,
+        payload: Any,
+        *,
+        metadata: dict[str, Any] | None = None,
+        timestamp_ns: int | None = None,
+    ) -> TransportEnvelope:
+        local_env = self._local.publish(
+            key,
+            payload,
+            metadata=metadata,
+            timestamp_ns=timestamp_ns,
+        )
+        if self._policy.should_mirror_to_zenoh(key):
+            if self._zenoh is None:
+                raise RuntimeError(
+                    f"Zenoh control plane is unavailable for required key {key!r}."
+                )
+            self._zenoh.publish(
+                key,
+                payload,
+                metadata=metadata,
+                timestamp_ns=timestamp_ns,
+            )
+        return local_env
+
+    @property
+    def subscriber_count(self) -> int:
+        remote_count = int(getattr(self._zenoh, "subscriber_count", 0)) if self._zenoh else 0
+        return int(getattr(self._local, "subscriber_count", 0)) + remote_count
 
 
 def zenoh_transport_available() -> bool:
@@ -308,9 +451,12 @@ def create_transport(config: TransportConfig) -> TransportLike:
     """
     Resolve a concrete transport backend from teleop TransportConfig.
 
-    - `inproc`: Rust-backed transport when available and `zero_copy_hot_path=True`,
-      otherwise pure-Python in-process transport.
-    - `zenoh` / `dds`: reserved backend names; explicit runtime error until wired.
+    - `zenoh`: Zenoh-backed distributed transport (default). Requires Zenoh
+      support compiled into the native extension.
+    - `inproc`: In-process transport for testing only. Uses Rust-backed backend
+      when available and `zero_copy_hot_path=True`, otherwise pure-Python.
+    - `hybrid`: local shared-memory/in-process hot path plus Zenoh for
+      control-plane keys (`rfx/**`, `teleop/control/**`, `teleop/service/**`).
     """
     backend = str(config.backend).strip().lower()
     if backend == "inproc":
@@ -329,13 +475,23 @@ def create_transport(config: TransportConfig) -> TransportLike:
             key_prefix=zenoh_cfg.key_prefix,
         )
 
-    if backend == "dds":
-        raise NotImplementedError(
-            "Transport backend 'dds' is declared but not wired yet. Use backend='inproc' for now."
+    if backend == "hybrid":
+        from .config import HybridConfig, ZenohConfig
+
+        local = RustTransport() if bool(config.zero_copy_hot_path) and rust_transport_available() else InprocTransport()
+        zenoh_cfg = config.zenoh if config.zenoh is not None else ZenohConfig()
+        hybrid_cfg = config.hybrid if config.hybrid is not None else HybridConfig()
+        zenoh = ZenohTransport(
+            connect=zenoh_cfg.connect,
+            listen=zenoh_cfg.listen,
+            shared_memory=zenoh_cfg.shared_memory,
+            key_prefix=zenoh_cfg.key_prefix,
         )
+        return HybridTransport(local=local, zenoh=zenoh, config=hybrid_cfg)
 
     raise ValueError(
-        f"Unsupported transport backend {config.backend!r}. Expected one of: inproc, zenoh, dds."
+        f"Unsupported transport backend {config.backend!r}. "
+        f"Supported backends: 'zenoh', 'inproc', 'hybrid'."
     )
 
 

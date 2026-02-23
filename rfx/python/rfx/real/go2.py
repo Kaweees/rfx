@@ -1,26 +1,39 @@
 """
-rfx.real.go2 - Unitree Go2 hardware backend
+rfx.real.go2 - Unitree Go2 hardware backend via Zenoh transport pipeline.
+
+When using the Rust backend (default), a RobotNode wraps the hardware and
+all state/command traffic flows through the Zenoh transport.
+Legacy backends (unitree_sdk2py, subprocess) are kept for backwards compat.
 """
 
 from __future__ import annotations
 
+import json
+import logging
 import os
 import subprocess
 import sys
 import threading
-from typing import TYPE_CHECKING
+import warnings
+from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ..config import GO2_CONFIG, RobotConfig
 from ..observation import make_observation
+from ..robot.config import GO2_CONFIG, RobotConfig
 
 if TYPE_CHECKING:
     pass
 
+logger = logging.getLogger(__name__)
+
 
 class Go2Backend:
-    """Unitree Go2 hardware backend using Rust DDS driver."""
+    """Unitree Go2 hardware backend.
+
+    Uses a Rust RobotNode that communicates with the Go2 hardware and
+    publishes state/commands over the Zenoh transport pipeline.
+    """
 
     _channel_initialized = False
     _system_python = "/usr/bin/python3"
@@ -30,8 +43,12 @@ class Go2Backend:
         config: RobotConfig,
         ip_address: str = "192.168.123.161",
         edu_mode: bool = False,
-        dds_backend: str | None = None,
+        hw_backend: str | None = None,
         zenoh_endpoint: str | None = None,
+        transport: Any | None = None,
+        name: str | None = None,
+        # Deprecated alias — prefer hw_backend
+        dds_backend: str | None = None,
         **kwargs,
     ):
         self.config = config
@@ -39,13 +56,24 @@ class Go2Backend:
         self.edu_mode = edu_mode
         self._backend_mode = "rust"
         self._robot = None
-        self._sport_client = None
+        self._node = None
         self._state_sub = None
+        self._sport_client = None
+        self._unitree_state_sub = None
         self._latest_lowstate = None
         self._state_lock = threading.Lock()
 
-        # Resolve DDS backend: explicit param > env var > auto
-        backend_pref = (dds_backend or os.getenv("RFX_GO2_BACKEND", "auto")).strip().lower()
+        # Deprecation warning for old parameter name
+        if dds_backend is not None:
+            warnings.warn(
+                "dds_backend is deprecated, use hw_backend instead",
+                FutureWarning,
+                stacklevel=2,
+            )
+
+        # Resolve hw backend: explicit param > deprecated alias > env var > auto
+        _backend_arg = hw_backend or dds_backend
+        backend_pref = (_backend_arg or os.getenv("RFX_GO2_BACKEND", "auto")).strip().lower()
         if backend_pref not in {
             "auto",
             "rust",
@@ -60,38 +88,47 @@ class Go2Backend:
         if not self.edu_mode and backend_pref in {"auto", "unitree", "unitree_sdk2py"}:
             if self._init_unitree_sdk_backend():
                 self._backend_mode = "unitree_sdk2py"
+                logger.warning(
+                    "Using legacy unitree_sdk2py backend (not Zenoh). "
+                    "Set hw_backend='rust' or RFX_GO2_BACKEND=rust to force Zenoh."
+                )
                 return
             if self._init_unitree_subprocess_backend():
                 self._backend_mode = "unitree_subprocess"
+                logger.warning(
+                    "Using legacy unitree subprocess backend (not Zenoh). "
+                    "Set hw_backend='rust' or RFX_GO2_BACKEND=rust to force Zenoh."
+                )
                 return
 
+        # ---- Rust backend via RobotNode pipeline ----
         try:
-            from rfx._rfx import Go2, Go2Config
-
-            self._Go2 = Go2
-            self._Go2Config = Go2Config
+            from rfx._rfx import RobotNode as _RustRobotNode
         except ImportError as err:
             raise ImportError(
                 "rfx Rust bindings not available. Build with: maturin develop"
             ) from err
 
-        rust_config = Go2Config(ip_address)
-        if edu_mode:
-            rust_config = rust_config.with_edu_mode()
+        # Shared or auto-created transport
+        if transport is None:
+            from .. import node as _node_mod
 
-        # Apply DDS backend hint
-        hint_map = {"zenoh": "zenoh", "dust": "dust", "cyclone": "cyclone"}
-        if backend_pref in hint_map and hasattr(rust_config, "with_backend"):
-            rust_config = rust_config.with_backend(hint_map[backend_pref])
+            transport = _node_mod.auto_transport()
+        self._transport = transport
 
-        # Apply Zenoh endpoint (also implies zenoh backend if not already set)
-        if zenoh_endpoint:
-            if backend_pref not in hint_map and hasattr(rust_config, "with_backend"):
-                rust_config = rust_config.with_backend("zenoh")
-            if hasattr(rust_config, "with_zenoh_router"):
-                rust_config = rust_config.with_zenoh_router(zenoh_endpoint)
+        if name is None:
+            name = "go2"
 
-        self._robot = Go2.connect(rust_config)
+        # Build RobotNode for Go2 (publishes state/commands via Zenoh transport)
+        self._node = _RustRobotNode.go2(
+            name, ip_address, transport, edu_mode, 50.0
+        )
+        self._state_sub = self._node.subscribe_state()
+        self._backend_mode = "rust"
+
+    # ------------------------------------------------------------------
+    # Legacy unitree_sdk2py init (kept for backwards compat)
+    # ------------------------------------------------------------------
 
     def _init_unitree_sdk_backend(self) -> bool:
         pet_go_path = "/unitree/module/pet_go"
@@ -122,7 +159,7 @@ class Go2Backend:
             sub.Init(_on_state, 10)
 
             self._sport_client = client
-            self._state_sub = sub
+            self._unitree_state_sub = sub
             return True
         except Exception:
             return False
@@ -209,6 +246,32 @@ class Go2Backend:
             return -1
         return int(out[-1])
 
+    # ------------------------------------------------------------------
+    # Internal helpers for Rust/transport path
+    # ------------------------------------------------------------------
+
+    def _drain_latest(self) -> Any | None:
+        """Drain subscription queue and return most recent envelope."""
+        if self._state_sub is None:
+            return None
+        latest = None
+        while True:
+            env = self._state_sub.try_recv()
+            if env is None:
+                break
+            latest = env
+        if latest is None:
+            latest = self._state_sub.recv_timeout(0.1)
+        return latest
+
+    def _parse_state(self, env: Any) -> dict:
+        """Deserialize transport envelope payload."""
+        return json.loads(bytes(env.payload))
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
     def is_connected(self) -> bool:
         if self._backend_mode == "unitree_sdk2py":
             if self._sport_client is None:
@@ -217,49 +280,74 @@ class Go2Backend:
             return code == 0
         if self._backend_mode == "unitree_subprocess":
             return self._run_unitree_cmd("GetServerApiVersion") == 0
-        return self._robot.is_connected()
+        return self._node is not None and self._node.is_running
 
     def observe(self) -> dict[str, torch.Tensor]:
         if self._backend_mode in {"unitree_sdk2py", "unitree_subprocess"}:
-            with self._state_lock:
-                low_state = self._latest_lowstate
+            return self._observe_unitree()
 
-            if low_state is None:
-                positions = torch.zeros(12, dtype=torch.float32)
-                velocities = torch.zeros(12, dtype=torch.float32)
-                orientation = torch.tensor([1.0, 0.0, 0.0, 0.0], dtype=torch.float32)
-                angular_vel = torch.zeros(3, dtype=torch.float32)
-                linear_acc = torch.zeros(3, dtype=torch.float32)
-            else:
-                positions = torch.tensor(
-                    [m.q for m in low_state.motor_state[:12]], dtype=torch.float32
-                )
-                velocities = torch.tensor(
-                    [m.dq for m in low_state.motor_state[:12]], dtype=torch.float32
-                )
-                imu = low_state.imu_state
-                orientation = torch.tensor(list(imu.quaternion), dtype=torch.float32)
-                angular_vel = torch.tensor(list(imu.gyroscope), dtype=torch.float32)
-                linear_acc = torch.tensor(list(imu.accelerometer), dtype=torch.float32)
+        # Rust transport path
+        env = self._drain_latest()
+        if env is not None:
+            state = self._parse_state(env)
+            positions = torch.tensor(state["joint_positions"], dtype=torch.float32)
+            velocities = torch.tensor(state["joint_velocities"], dtype=torch.float32)
+        else:
+            positions = torch.zeros(12, dtype=torch.float32)
+            velocities = torch.zeros(12, dtype=torch.float32)
 
-            raw_state = torch.cat(
-                [positions, velocities, orientation, angular_vel, linear_acc]
-            ).unsqueeze(0)
-
-            return make_observation(
-                state=raw_state,
-                state_dim=self.config.state_dim,
-                max_state_dim=self.config.max_state_dim,
-                device="cpu",
+        # Go2 state also has IMU data in the pose field — extract from state
+        if env is not None:
+            state = self._parse_state(env)
+            # RobotState.pose has orientation info
+            pose = state.get("pose", {})
+            rot = pose.get("rotation", {})
+            orientation = torch.tensor(
+                [rot.get("w", 1.0), rot.get("x", 0.0), rot.get("y", 0.0), rot.get("z", 0.0)],
+                dtype=torch.float32,
             )
+            # Joint torques can serve as proxy for angular velocity (reserved for future use)
+            _ = state.get("joint_torques", [])
+            angular_vel = torch.zeros(3, dtype=torch.float32)
+            linear_acc = torch.zeros(3, dtype=torch.float32)
+        else:
+            orientation = torch.tensor([1.0, 0.0, 0.0, 0.0], dtype=torch.float32)
+            angular_vel = torch.zeros(3, dtype=torch.float32)
+            linear_acc = torch.zeros(3, dtype=torch.float32)
 
-        state = self._robot.state()
-        positions = torch.tensor(state.joint_positions(), dtype=torch.float32)
-        velocities = torch.tensor(state.joint_velocities(), dtype=torch.float32)
-        imu = state.imu
-        orientation = torch.tensor(imu.quaternion, dtype=torch.float32)
-        angular_vel = torch.tensor(imu.gyroscope, dtype=torch.float32)
-        linear_acc = torch.tensor(imu.accelerometer, dtype=torch.float32)
+        raw_state = torch.cat(
+            [positions, velocities, orientation, angular_vel, linear_acc]
+        ).unsqueeze(0)
+
+        return make_observation(
+            state=raw_state,
+            state_dim=self.config.state_dim,
+            max_state_dim=self.config.max_state_dim,
+            device="cpu",
+        )
+
+    def _observe_unitree(self) -> dict[str, torch.Tensor]:
+        """Observe via legacy unitree_sdk2py path."""
+        with self._state_lock:
+            low_state = self._latest_lowstate
+
+        if low_state is None:
+            positions = torch.zeros(12, dtype=torch.float32)
+            velocities = torch.zeros(12, dtype=torch.float32)
+            orientation = torch.tensor([1.0, 0.0, 0.0, 0.0], dtype=torch.float32)
+            angular_vel = torch.zeros(3, dtype=torch.float32)
+            linear_acc = torch.zeros(3, dtype=torch.float32)
+        else:
+            positions = torch.tensor(
+                [m.q for m in low_state.motor_state[:12]], dtype=torch.float32
+            )
+            velocities = torch.tensor(
+                [m.dq for m in low_state.motor_state[:12]], dtype=torch.float32
+            )
+            imu = low_state.imu_state
+            orientation = torch.tensor(list(imu.quaternion), dtype=torch.float32)
+            angular_vel = torch.tensor(list(imu.gyroscope), dtype=torch.float32)
+            linear_acc = torch.tensor(list(imu.accelerometer), dtype=torch.float32)
 
         raw_state = torch.cat(
             [positions, velocities, orientation, angular_vel, linear_acc]
@@ -290,16 +378,16 @@ class Go2Backend:
             self._check_rc(self._run_unitree_cmd("Move", vx, vy, vyaw), "Move")
             return
 
+        # Rust transport path — send command via node
         if not self.edu_mode:
+            # Sport-mode velocity command as 3-element position command
             vx = action[0, 0].item()
             vy = action[0, 1].item()
             vyaw = action[0, 2].item()
-            self._robot.walk(vx, vy, vyaw)
+            self._node.send_command([vx, vy, vyaw])
         else:
-            action_12dof = action[0, :12].cpu().numpy()
-            kp = action[0, 12].item() if action.shape[1] > 12 else 20.0
-            kd = action[0, 13].item() if action.shape[1] > 13 else 0.5
-            self._robot.set_motor_positions(list(action_12dof), kp, kd)
+            action_12dof = action[0, :12].cpu().tolist()
+            self._node.send_command(action_12dof)
 
     def reset(self) -> dict[str, torch.Tensor]:
         if self._backend_mode == "unitree_sdk2py":
@@ -308,7 +396,8 @@ class Go2Backend:
         if self._backend_mode == "unitree_subprocess":
             self._check_rc(self._run_unitree_cmd("RecoveryStand"), "RecoveryStand")
             return self.observe()
-        self._robot.stand()
+        # Rust transport path — send stand-up command
+        self._node.send_command([0.0] * 12)
         return self.observe()
 
     def go_home(self) -> None:
@@ -318,7 +407,7 @@ class Go2Backend:
         if self._backend_mode == "unitree_subprocess":
             self._check_rc(self._run_unitree_cmd("RecoveryStand"), "RecoveryStand")
             return
-        self._robot.stand()
+        self._node.send_command([0.0] * 12)
 
     def disconnect(self) -> None:
         if self._backend_mode == "unitree_sdk2py":
@@ -327,9 +416,9 @@ class Go2Backend:
                     self._sport_client.StopMove()
                 except Exception:
                     pass
-            if self._state_sub is not None:
+            if self._unitree_state_sub is not None:
                 try:
-                    self._state_sub.Close()
+                    self._unitree_state_sub.Close()
                 except Exception:
                     pass
             return
@@ -339,7 +428,8 @@ class Go2Backend:
             except Exception:
                 pass
             return
-        self._robot.disconnect()
+        if self._node is not None:
+            self._node.stop()
 
     def stand(self) -> None:
         if self._backend_mode == "unitree_sdk2py":
@@ -348,7 +438,7 @@ class Go2Backend:
         if self._backend_mode == "unitree_subprocess":
             self._check_rc(self._run_unitree_cmd("RecoveryStand"), "RecoveryStand")
             return
-        self._robot.stand()
+        self._node.send_command([0.0] * 12)
 
     def sit(self) -> None:
         if self._backend_mode == "unitree_sdk2py":
@@ -357,7 +447,8 @@ class Go2Backend:
         if self._backend_mode == "unitree_subprocess":
             self._check_rc(self._run_unitree_cmd("Sit"), "Sit")
             return
-        self._robot.sit()
+        # No direct "sit" via generic Command — approximate with zero torques
+        self._node.send_command([0.0] * 12)
 
     def walk(self, vx: float, vy: float, vyaw: float) -> None:
         if self._backend_mode == "unitree_sdk2py":
@@ -366,7 +457,17 @@ class Go2Backend:
         if self._backend_mode == "unitree_subprocess":
             self._check_rc(self._run_unitree_cmd("Move", vx, vy, vyaw), "Move")
             return
-        self._robot.walk(vx, vy, vyaw)
+        self._node.send_command([vx, vy, vyaw])
+
+    @property
+    def node(self) -> Any:
+        """Access the underlying RobotNode (Rust transport path only)."""
+        return self._node
+
+    @property
+    def transport(self) -> Any:
+        """Access the transport backend."""
+        return getattr(self, "_transport", None)
 
 
 class Go2Robot:
@@ -374,23 +475,23 @@ class Go2Robot:
 
     Args:
         ip_address: Robot IP address.
-        dds_backend: DDS backend to use ("zenoh", "dust", "cyclone", or None for auto).
+        hw_backend: Hardware communication backend ("rust" for Zenoh transport,
+            "unitree" for legacy unitree_sdk2py, or None for auto).
             Can also be set via RFX_GO2_BACKEND env var.
         zenoh_endpoint: Zenoh router endpoint (e.g. "tcp/192.168.123.161:7447").
-            Setting this implies dds_backend="zenoh".
         edu_mode: Enable low-level motor control.
         **kwargs: Additional kwargs forwarded to RealRobot.
 
     Examples:
-        >>> go2 = Go2Robot()                                    # auto-detect backend
-        >>> go2 = Go2Robot(dds_backend="zenoh")                 # force Zenoh via bridge
+        >>> go2 = Go2Robot()                                    # auto-detect (Rust/Zenoh)
         >>> go2 = Go2Robot(zenoh_endpoint="tcp/10.0.0.1:7447")  # Zenoh with explicit router
+        >>> go2 = Go2Robot(edu_mode=True)                       # low-level motor control
     """
 
     def __new__(
         cls,
         ip_address: str = "192.168.123.161",
-        dds_backend: str | None = None,
+        hw_backend: str | None = None,
         zenoh_endpoint: str | None = None,
         edu_mode: bool = False,
         **kwargs,
@@ -401,7 +502,7 @@ class Go2Robot:
             config=GO2_CONFIG,
             robot_type="go2",
             ip_address=ip_address,
-            dds_backend=dds_backend,
+            hw_backend=hw_backend,
             zenoh_endpoint=zenoh_endpoint,
             edu_mode=edu_mode,
             **kwargs,

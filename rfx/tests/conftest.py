@@ -5,6 +5,40 @@ from collections.abc import Callable
 import pytest
 
 
+# ---------------------------------------------------------------------------
+# Environment isolation (autouse)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _isolate_tinygrad_cache(tmp_path, monkeypatch):
+    """Redirect tinygrad cache to a per-test temp directory.
+
+    Prevents sqlite3.OperationalError when the system-wide tinygrad cache DB
+    is locked or readonly (e.g. concurrent CI runners, readonly filesystems).
+    """
+    cache_dir = tmp_path / "tinygrad_cache"
+    cache_dir.mkdir()
+    monkeypatch.setenv("XDG_CACHE_HOME", str(cache_dir))
+    monkeypatch.setenv("CACHELEVEL", "0")
+
+
+@pytest.fixture(autouse=True)
+def _disable_zenoh_shm(monkeypatch):
+    """Default Zenoh shared memory OFF in tests.
+
+    SHM requires OS-level support (POSIX shm_open, /dev/shm) that is not
+    always available in CI or sandboxed environments.  Individual tests that
+    specifically need SHM can override this by setting the env var back.
+    """
+    monkeypatch.setenv("RFX_ZENOH_SHARED_MEMORY", "0")
+
+
+# ---------------------------------------------------------------------------
+# Shared skill/robot fixtures
+# ---------------------------------------------------------------------------
+
+
 @pytest.fixture
 def sample_skill_func() -> Callable[..., str]:
     """A sample function to use as a skill."""

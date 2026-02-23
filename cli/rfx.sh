@@ -6,7 +6,7 @@ cd "$ROOT"
 
 usage() {
   cat <<'USAGE'
-Usage: cli/rfx.sh <doctor|doctor-teleop|doctor-so101|so101-demo|so101-bimanual|bootstrap|bootstrap-teleop|setup-source|check|pkg-create|pkg-list|run|launch|graph|topic-list>
+Usage: cli/rfx.sh <doctor|doctor-teleop|doctor-so101|so101-demo|so101-bimanual|so101-setup|bootstrap|bootstrap-teleop|setup-source|check|pkg-create|pkg-list|run|launch|graph|topic-list|collect|validate|train|eval|shadow|deploy|runs|lineage|reproduce>
 USAGE
 }
 
@@ -64,6 +64,10 @@ so101_bimanual() {
   uv run --python 3.13 rfx/examples/teleop_record.py --config rfx/configs/so101_bimanual.yaml "$@"
 }
 
+so101_setup() {
+  uv run --python 3.13 python scripts/so101-setup.py "$@"
+}
+
 main() {
   if [[ $# -lt 1 ]]; then
     usage
@@ -88,6 +92,10 @@ main() {
     so101-bimanual)
       shift
       so101_bimanual "$@"
+      ;;
+    so101-setup)
+      shift
+      so101_setup "$@"
       ;;
     bootstrap)
       bootstrap
@@ -124,6 +132,42 @@ main() {
     topic-list)
       shift
       runtime_cli topic-list "$@"
+      ;;
+    collect)
+      shift
+      runtime_cli collect "$@"
+      ;;
+    validate)
+      shift
+      runtime_cli validate "$@"
+      ;;
+    train)
+      shift
+      runtime_cli train "$@"
+      ;;
+    eval)
+      shift
+      runtime_cli eval "$@"
+      ;;
+    shadow)
+      shift
+      runtime_cli shadow "$@"
+      ;;
+    deploy)
+      shift
+      runtime_cli deploy "$@"
+      ;;
+    runs)
+      shift
+      runtime_cli runs "$@"
+      ;;
+    lineage)
+      shift
+      runtime_cli lineage "$@"
+      ;;
+    reproduce)
+      shift
+      runtime_cli reproduce "$@"
       ;;
     *)
       usage

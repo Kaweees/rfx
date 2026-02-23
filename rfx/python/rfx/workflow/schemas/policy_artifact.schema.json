@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rfx.dev/schemas/policy_artifact.schema.json",
+  "title": "rfx Policy Artifact",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "artifact_ref",
+    "artifact_type",
+    "lineage",
+    "compatibility"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "artifact_ref": {
+      "type": "string"
+    },
+    "artifact_type": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "lineage": {
+      "type": "object"
+    },
+    "compatibility": {
+      "type": "object",
+      "required": [
+        "config_hash"
+      ],
+      "properties": {
+        "config_hash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "safety_profile": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "robot_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

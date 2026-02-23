@@ -620,7 +620,8 @@ impl PyGo2Config {
         }
     }
 
-    /// Set the preferred DDS backend ("zenoh", "cyclone", or "dust")
+    /// Set the preferred DDS backend. Zenoh is the only supported distributed
+    /// transport. "cyclone" and "dust" are internal/legacy options.
     fn with_backend(&self, backend: &str) -> PyResult<Self> {
         let hint = match backend {
             "zenoh" => rfx_core::hardware::go2::Go2BackendHint::Zenoh,
@@ -628,8 +629,7 @@ impl PyGo2Config {
             "dust" => rfx_core::hardware::go2::Go2BackendHint::DustDds,
             other => {
                 return Err(PyValueError::new_err(format!(
-                    "Unknown backend '{}'. Expected 'zenoh', 'cyclone', or 'dust'",
-                    other
+                    "Unknown backend '{other}'. Use 'zenoh' (recommended)."
                 )))
             }
         };
@@ -1844,30 +1844,40 @@ impl PyQoSProfile {
     /// Create a QoS profile for sensor data (best-effort, drop on backpressure).
     #[staticmethod]
     fn sensor_data() -> Self {
-        Self { inner: rfx_core::comm::QoSProfile::sensor_data() }
+        Self {
+            inner: rfx_core::comm::QoSProfile::sensor_data(),
+        }
     }
 
     /// Create a reliable QoS profile (block on backpressure).
     #[staticmethod]
     fn reliable() -> Self {
-        Self { inner: rfx_core::comm::QoSProfile::reliable() }
+        Self {
+            inner: rfx_core::comm::QoSProfile::reliable(),
+        }
     }
 
     /// Create a QoS profile for parameters (reliable, transient-local).
     #[staticmethod]
     fn parameters() -> Self {
-        Self { inner: rfx_core::comm::QoSProfile::parameters() }
+        Self {
+            inner: rfx_core::comm::QoSProfile::parameters(),
+        }
     }
 
     /// Create a QoS profile for system events.
     #[staticmethod]
     fn system_events() -> Self {
-        Self { inner: rfx_core::comm::QoSProfile::system_events() }
+        Self {
+            inner: rfx_core::comm::QoSProfile::system_events(),
+        }
     }
 
     fn __repr__(&self) -> String {
-        format!("QoSProfile(reliability={:?}, durability={:?})",
-            self.inner.reliability, self.inner.durability)
+        format!(
+            "QoSProfile(reliability={:?}, durability={:?})",
+            self.inner.reliability, self.inner.durability
+        )
     }
 }
 
@@ -1920,19 +1930,25 @@ impl PyDiscovery {
     }
 
     fn declare_node(&self, name: &str) -> PyResult<()> {
-        let _token = self.inner.declare_node(name)
+        let _token = self
+            .inner
+            .declare_node(name)
             .map_err(|e: rfx_core::Error| PyRuntimeError::new_err(e.to_string()))?;
         Ok(())
     }
 
     fn declare_publisher(&self, node: &str, topic: &str) -> PyResult<()> {
-        let _token = self.inner.declare_publisher(node, topic)
+        let _token = self
+            .inner
+            .declare_publisher(node, topic)
             .map_err(|e: rfx_core::Error| PyRuntimeError::new_err(e.to_string()))?;
         Ok(())
     }
 
     fn declare_subscriber(&self, node: &str, topic: &str) -> PyResult<()> {
-        let _token = self.inner.declare_subscriber(node, topic)
+        let _token = self
+            .inner
+            .declare_subscriber(node, topic)
             .map_err(|e: rfx_core::Error| PyRuntimeError::new_err(e.to_string()))?;
         Ok(())
     }
@@ -1987,7 +2003,8 @@ impl PyParameterServer {
 
     fn set(&self, key: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let param = py_to_param_value(value)?;
-        self.inner.set(key, param)
+        self.inner
+            .set(key, param)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
@@ -2035,6 +2052,188 @@ impl PySchemaRegistry {
     }
 }
 
+// ============================================================================
+// RobotNode Bindings — Universal Zenoh pipeline
+// ============================================================================
+
+/// Universal robot node that bridges any hardware to the transport layer.
+///
+/// Publishes RobotState to `rfx/{name}/state` and accepts Command on
+/// `rfx/{name}/cmd`. Works with any transport backend (Zenoh or Inproc).
+///
+/// Example:
+///     >>> node = RobotNode.so101("my-arm", "/dev/ttyACM0")
+///     >>> node.is_running  # True
+///     >>> node.stop()
+#[pyclass(name = "RobotNode")]
+pub struct PyRobotNode {
+    inner: parking_lot::Mutex<rfx_core::node::RobotNode>,
+    transport: Arc<dyn rfx_core::comm::TransportBackend>,
+}
+
+#[pymethods]
+impl PyRobotNode {
+    /// Create a RobotNode for an SO-101 arm with the given transport.
+    ///
+    /// If no transport is provided, creates an InprocTransport.
+    #[staticmethod]
+    #[pyo3(signature = (name, port, transport = None, is_leader = false, baudrate = 1_000_000, publish_rate_hz = 50.0))]
+    fn so101(
+        py: Python<'_>,
+        name: &str,
+        port: &str,
+        transport: Option<&PyTransport>,
+        is_leader: bool,
+        baudrate: u32,
+        publish_rate_hz: f64,
+    ) -> PyResult<Self> {
+        let transport_arc: Arc<dyn rfx_core::comm::TransportBackend> = match transport {
+            Some(t) => t.inner.clone(),
+            None => Arc::new(rfx_core::comm::InprocTransport::new()),
+        };
+
+        let so101_config = if is_leader {
+            rfx_core::hardware::so101::So101Config::leader(port)
+        } else {
+            rfx_core::hardware::so101::So101Config::follower(port)
+        };
+        let so101_config = if baudrate != 1_000_000 {
+            so101_config.with_baudrate(baudrate)
+        } else {
+            so101_config
+        };
+
+        let arm = py
+            .detach(|| rfx_core::hardware::so101::So101::connect(so101_config))
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        if is_leader {
+            arm.set_torque_enable(false)
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        } else {
+            // Ensure follower mode always starts with torque enabled so
+            // incoming position commands produce motion immediately.
+            arm.set_torque_enable(true)
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        }
+
+        let node_config = rfx_core::node::RobotNodeConfig {
+            name: name.to_owned(),
+            publish_rate_hz,
+        };
+
+        let node = rfx_core::node::RobotNode::spawn(arm, transport_arc.clone(), node_config)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        Ok(Self {
+            inner: parking_lot::Mutex::new(node),
+            transport: transport_arc,
+        })
+    }
+
+    /// Check if the node is running.
+    #[getter]
+    fn is_running(&self) -> bool {
+        self.inner.lock().is_running()
+    }
+
+    /// Get the node name.
+    #[getter]
+    fn name(&self) -> String {
+        self.inner.lock().name().to_owned()
+    }
+
+    /// Stop the node.
+    fn stop(&self) {
+        self.inner.lock().stop();
+    }
+
+    /// Get the transport backend (for subscribing to state, sending commands).
+    #[getter]
+    fn transport(&self) -> PyTransport {
+        PyTransport {
+            inner: self.transport.clone(),
+        }
+    }
+
+    /// Subscribe to this node's state topic.
+    #[pyo3(signature = (capacity = 16))]
+    fn subscribe_state(&self, capacity: usize) -> PyTransportSubscription {
+        let key = rfx_core::node::keys::state_key(self.inner.lock().name());
+        let sub = self.transport.subscribe(&key, capacity);
+        PyTransportSubscription { inner: sub }
+    }
+
+    /// Send a command to this node via the transport.
+    fn send_command(&self, positions: Vec<f64>) -> PyResult<()> {
+        let cmd = rfx_core::hardware::Command::position(&positions);
+        let cmd_bytes = serde_json::to_vec(&cmd)
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to serialize command: {e}")))?;
+        let key = rfx_core::node::keys::cmd_key(self.inner.lock().name());
+        self.transport
+            .publish(&key, Arc::from(cmd_bytes.into_boxed_slice()), None);
+        Ok(())
+    }
+
+    /// Create a RobotNode for a Go2 quadruped with the given transport.
+    ///
+    /// If no transport is provided, creates an InprocTransport.
+    #[staticmethod]
+    #[pyo3(signature = (name, ip_address = "192.168.123.161", transport = None, edu_mode = false, publish_rate_hz = 50.0))]
+    fn go2(
+        py: Python<'_>,
+        name: &str,
+        ip_address: &str,
+        transport: Option<&PyTransport>,
+        edu_mode: bool,
+        publish_rate_hz: f64,
+    ) -> PyResult<Self> {
+        let transport_arc: Arc<dyn rfx_core::comm::TransportBackend> = match transport {
+            Some(t) => t.inner.clone(),
+            None => Arc::new(rfx_core::comm::InprocTransport::new()),
+        };
+
+        let mut go2_config = rfx_core::hardware::go2::Go2Config::new(ip_address);
+        if edu_mode {
+            go2_config = go2_config.with_edu_mode();
+        }
+
+        let robot = py
+            .detach(|| rfx_core::hardware::go2::Go2::connect(go2_config))
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        let node_config = rfx_core::node::RobotNodeConfig {
+            name: name.to_owned(),
+            publish_rate_hz,
+        };
+
+        let node = rfx_core::node::RobotNode::spawn(robot, transport_arc.clone(), node_config)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        Ok(Self {
+            inner: parking_lot::Mutex::new(node),
+            transport: transport_arc,
+        })
+    }
+
+    /// Subscribe to this node's command topic (for monitoring).
+    #[pyo3(signature = (capacity = 16))]
+    fn subscribe_cmd(&self, capacity: usize) -> PyTransportSubscription {
+        let key = rfx_core::node::keys::cmd_key(self.inner.lock().name());
+        let sub = self.transport.subscribe(&key, capacity);
+        PyTransportSubscription { inner: sub }
+    }
+
+    fn __repr__(&self) -> String {
+        let node = self.inner.lock();
+        format!(
+            "RobotNode(name='{}', running={})",
+            node.name(),
+            node.is_running()
+        )
+    }
+}
+
 // Helper functions for ParamValue <-> Python conversion
 fn py_to_param_value(value: &Bound<'_, PyAny>) -> PyResult<rfx_core::comm::ParamValue> {
     if let Ok(b) = value.extract::<bool>() {
@@ -2055,7 +2254,8 @@ fn param_value_to_py(py: Python<'_>, value: &rfx_core::comm::ParamValue) -> Py<P
     // Convert serde_json::Value to Python via JSON string round-trip
     let json_str = json_value.to_string();
     let json_mod = py.import("json").expect("json module");
-    json_mod.call_method1("loads", (json_str,))
+    json_mod
+        .call_method1("loads", (json_str,))
         .expect("json.loads failed")
         .unbind()
 }

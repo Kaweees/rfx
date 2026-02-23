@@ -133,9 +133,14 @@ def test_create_transport_falls_back_to_python_inproc(monkeypatch) -> None:
     assert isinstance(transport, transport_mod.InprocTransport)
 
 
-def test_create_transport_rejects_unwired_backends() -> None:
-    with pytest.raises(NotImplementedError):
-        transport_mod.create_transport(TransportConfig(backend="dds"))
+def test_create_transport_rejects_unknown_backends() -> None:
+    with pytest.raises(ValueError, match="Unsupported transport backend"):
+        transport_mod.create_transport(TransportConfig(backend="dds"))  # type: ignore[arg-type]
+
+
+def test_create_transport_rejects_invalid_backend_string() -> None:
+    with pytest.raises(ValueError, match="Unsupported transport backend"):
+        transport_mod.create_transport(TransportConfig(backend="grpc"))  # type: ignore[arg-type]
 
 
 def test_create_transport_zenoh_raises_without_bindings(monkeypatch) -> None:
@@ -143,3 +148,82 @@ def test_create_transport_zenoh_raises_without_bindings(monkeypatch) -> None:
     monkeypatch.setattr(transport_mod, "_RustTransport", None)
     with pytest.raises(RuntimeError, match="unavailable"):
         transport_mod.create_transport(TransportConfig(backend="zenoh"))
+
+
+def test_create_transport_hybrid_routes_control_to_zenoh(monkeypatch) -> None:
+    class _LocalSub:
+        pattern = "teleop/**"
+
+        def try_recv(self):
+            return None
+
+    class _ZenohSub:
+        pattern = "teleop/control/**"
+
+        def try_recv(self):
+            return None
+
+    class _FakeLocalTransport:
+        def __init__(self):
+            self.subscriber_count = 0
+            self.published: list[str] = []
+
+        def subscribe(self, pattern, capacity):
+            self.subscriber_count += 1
+            return _LocalSub()
+
+        def unsubscribe(self, _sub):
+            return True
+
+        def publish(self, key, payload, metadata=None, timestamp_ns=None):
+            self.published.append(key)
+            return transport_mod.TransportEnvelope(
+                key=key,
+                sequence=1,
+                timestamp_ns=timestamp_ns or 0,
+                payload=payload,
+                metadata=metadata or {},
+            )
+
+    class _FakeZenohTransport:
+        def __init__(self, **_kwargs):
+            self.subscriber_count = 0
+            self.published: list[str] = []
+
+        def subscribe(self, pattern, capacity):
+            self.subscriber_count += 1
+            return _ZenohSub()
+
+        def unsubscribe(self, _sub):
+            return True
+
+        def publish(self, key, payload, metadata=None, timestamp_ns=None):
+            self.published.append(key)
+            return transport_mod.TransportEnvelope(
+                key=key,
+                sequence=1,
+                timestamp_ns=timestamp_ns or 0,
+                payload=payload,
+                metadata=metadata or {},
+            )
+
+    monkeypatch.setattr(transport_mod, "RustTransport", _FakeLocalTransport)
+    monkeypatch.setattr(transport_mod, "ZenohTransport", _FakeZenohTransport)
+    monkeypatch.setattr(transport_mod, "rust_transport_available", lambda: True)
+
+    transport = transport_mod.create_transport(TransportConfig(backend="hybrid"))
+    assert isinstance(transport, transport_mod.HybridTransport)
+
+    local = transport._local
+    zenoh = transport._zenoh
+
+    transport.publish("teleop/left/state", b"x")
+    assert local.published == ["teleop/left/state"]
+    assert zenoh.published == []
+
+    transport.publish("teleop/control/start", b"x")
+    assert local.published[-1] == "teleop/control/start"
+    assert zenoh.published == ["teleop/control/start"]
+
+    sub = transport.subscribe("teleop/control/**")
+    assert len(sub.subscriptions) == 2

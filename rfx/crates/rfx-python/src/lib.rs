@@ -108,6 +108,9 @@ fn _rfx(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Schema types
     m.add_class::<PySchemaRegistry>()?;
 
+    // Node types — universal Zenoh pipeline
+    m.add_class::<PyRobotNode>()?;
+
     Ok(())
 }
 

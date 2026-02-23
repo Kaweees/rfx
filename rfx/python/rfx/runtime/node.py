@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..teleop.transport import InprocTransport, RustTransport, rust_transport_available
+from ..node import auto_transport
 
 
 @dataclass
@@ -29,9 +29,7 @@ class Node:
     def __init__(self, context: NodeContext):
         self.ctx = context
         self._running = False
-        self.transport = context.transport or (
-            RustTransport() if rust_transport_available() else InprocTransport()
-        )
+        self.transport = context.transport or auto_transport()
 
     def setup(self) -> None:
         pass

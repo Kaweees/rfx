@@ -65,5 +65,8 @@ dmypy.json
 .rfx/perf-baselines/
 .rfx/teleop-jitter.json
 
+# Caches
+.cache/
+
 # Moon
 .moon/cache/

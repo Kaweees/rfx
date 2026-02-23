@@ -126,9 +126,10 @@ impl ZenohContext {
 
     /// Ordered shutdown: close session.
     pub fn shutdown(&self) -> crate::Result<()> {
-        self.session.close().wait().map_err(|e| {
-            crate::Error::Communication(format!("failed to close zenoh session: {e}"))
-        })
+        self.session
+            .close()
+            .wait()
+            .map_err(|e| crate::Error::Communication(format!("failed to close zenoh session: {e}")))
     }
 }
 
@@ -144,6 +145,8 @@ impl Drop for ZenohContext {
 /// All operations are synchronous — Zenoh 1.7's builder API exposes `.wait()`
 /// methods that perform the work on the calling thread.
 pub struct ZenohTransport {
+    /// Keep the context alive so the session isn't closed prematurely.
+    _context: Option<ZenohContext>,
     session: Arc<zenoh::Session>,
     subscriptions: RwLock<Vec<ZenohSubscriptionEntry>>,
     next_seq: AtomicU64,
@@ -157,12 +160,23 @@ impl ZenohTransport {
     /// Blocks the caller while the session is established.
     pub fn new(config: ZenohTransportConfig) -> crate::Result<Self> {
         let ctx = ZenohContext::new(config)?;
-        Ok(Self::from_context(&ctx))
+        let transport = Self {
+            session: ctx.session.clone(),
+            subscriptions: RwLock::new(Vec::new()),
+            next_seq: AtomicU64::new(0),
+            next_sub_id: AtomicU64::new(1),
+            key_prefix: ctx.key_prefix.clone(),
+            _context: Some(ctx),
+        };
+        Ok(transport)
     }
 
     /// Create a transport from an existing ZenohContext.
+    ///
+    /// The caller is responsible for keeping `ctx` alive.
     pub fn from_context(ctx: &ZenohContext) -> Self {
         Self {
+            _context: None,
             session: ctx.session.clone(),
             subscriptions: RwLock::new(Vec::new()),
             next_seq: AtomicU64::new(0),
@@ -237,7 +251,7 @@ impl TransportBackend for ZenohTransport {
         };
 
         let tx_clone = tx.clone();
-        let subscriber = self
+        let subscriber = match self
             .session
             .declare_subscriber(&full_pattern)
             .callback(move |sample| {
@@ -274,7 +288,17 @@ impl TransportBackend for ZenohTransport {
                 let _ = tx_clone.try_send(envelope);
             })
             .wait()
-            .expect("failed to declare zenoh subscriber");
+        {
+            Ok(sub) => sub,
+            Err(e) => {
+                tracing::error!(
+                    "Failed to declare Zenoh subscriber for '{}': {e}",
+                    full_pattern
+                );
+                // Return a disconnected subscription — recv calls will return None.
+                return TransportSubscription::new(id, pattern_arc, rx);
+            }
+        };
 
         self.subscriptions.write().push(ZenohSubscriptionEntry {
             id,

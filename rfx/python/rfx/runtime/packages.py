@@ -14,7 +14,7 @@ class RfxPackage:
     root: Path
     module_path: Path
     nodes: dict[str, str]
-    version: str = "0.1.0"
+    version: str = "0.2.0"
 
 
 def _workspace_root() -> Path:
@@ -39,7 +39,7 @@ def discover_packages(root: Path | None = None) -> dict[str, RfxPackage]:
             root=manifest.parent,
             module_path=manifest.parent / mod_rel,
             nodes={str(k): str(v) for k, v in nodes.items()},
-            version=str(pkg.get("version", "0.1.0")),
+            version=str(pkg.get("version", "0.2.0")),
         )
     return out
 

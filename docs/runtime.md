@@ -1,6 +1,6 @@
 # Runtime (ROS-like)
 
-This runtime adds ROS-style workflow primitives with a Python-first API and Rust-backed transport options.
+This runtime adds ROS-style workflow primitives with a Python-first API and Zenoh-backed transport.
 
 ## What It Includes
 
@@ -9,19 +9,19 @@ This runtime adds ROS-style workflow primitives with a Python-first API and Rust
 - Node lifecycle contract (`setup` / `tick` / `shutdown`)
 - Graph and topic introspection (`graph`, `topic-list`)
 - Backend profile abstraction (`mock` / `genesis` / `real`) via launch config
-- Rust-backed transport path available through `rfx._rfx` transport bindings
+- Zenoh transport (Rust-backed, compiled in by default)
 
 ## Commands
 
-Use `cli/rfx.sh`:
+Use `rfx` (installed entrypoint) or `cli/rfx.sh` from source checkout:
 
 ```bash
-cli/rfx.sh pkg-create my_pkg
-cli/rfx.sh pkg-list
-cli/rfx.sh run my_pkg my_pkg_node --backend mock
-cli/rfx.sh launch packages/my_pkg/launch.yaml
-cli/rfx.sh graph
-cli/rfx.sh topic-list
+rfx pkg-create my_pkg
+rfx pkg-list
+rfx run my_pkg my_pkg_node --backend mock
+rfx launch packages/my_pkg/launch.yaml
+rfx graph
+rfx topic-list
 ```
 
 ## Package Manifest
@@ -31,7 +31,7 @@ Each package uses `rfx_pkg.toml`:
 ```toml
 [package]
 name = "my_pkg"
-version = "0.1.0"
+version = "0.2.0"
 python_module = "src"
 
 [nodes]
@@ -70,11 +70,8 @@ nodes:
 
 `backend` and profile env values are propagated to nodes.
 
-## Rust Advantage
+## Zenoh Transport
 
-`Node` transport defaults to:
+All nodes use the Zenoh transport by default (Rust-backed, compiled into the native extension). This provides cross-process pub/sub, shared-memory zero-copy on the same machine, and network-transparent communication between distributed robots.
 
-- `RustTransport` when native bindings are available
-- fallback to `InprocTransport` otherwise
-
-This keeps the same node contract while letting performance-critical messaging move to Rust.
+If the native extension is not built, node creation will raise a clear error with build instructions.

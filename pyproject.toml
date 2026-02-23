@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "rfx-sdk"
-version = "0.1.3"
+version = "0.2.0"
 description = "A tinygrad-inspired robotics framework for Unitree Go2"
 readme = "README.md"
 license = { text = "MIT" }
@@ -47,6 +47,10 @@ teleop = [
 teleop-lerobot = [
     "lerobot",
 ]
+# LeRobot-native data collection SDK
+collection = [
+    "lerobot",
+]
 # Development dependencies
 dev = [
     "pytest>=7.0",
@@ -60,8 +64,12 @@ all = [
     "rfx-sdk[agent]",
     "rfx-sdk[teleop]",
     "rfx-sdk[teleop-lerobot]",
+    "rfx-sdk[collection]",
     "rfx-sdk[dev]",
 ]
+
+[project.scripts]
+rfx = "rfx.runtime.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/quantbagel/rfx"
@@ -79,7 +87,7 @@ include = [{ path = "LICENSE", format = "sdist" }]
 # Module name
 module-name = "rfx._rfx"
 # Features
-features = ["extension-module"]
+features = ["extension-module", "zenoh"]
 # Strip symbols for smaller binaries
 strip = true
 

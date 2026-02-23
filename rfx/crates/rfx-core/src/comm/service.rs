@@ -129,12 +129,7 @@ impl Drop for ServiceServerHandle {
 /// Backend trait for service (request/response) communication.
 pub trait ServiceBackend: Send + Sync {
     /// Register a service handler.
-    fn serve(
-        &self,
-        name: &str,
-        handler: ServiceHandler,
-        arity: ServiceArity,
-    ) -> crate::Result<()>;
+    fn serve(&self, name: &str, handler: ServiceHandler, arity: ServiceArity) -> crate::Result<()>;
 
     /// Unregister a service handler.
     fn unserve(&self, name: &str);
@@ -180,12 +175,7 @@ impl Default for InprocServiceBackend {
 }
 
 impl ServiceBackend for InprocServiceBackend {
-    fn serve(
-        &self,
-        name: &str,
-        handler: ServiceHandler,
-        arity: ServiceArity,
-    ) -> crate::Result<()> {
+    fn serve(&self, name: &str, handler: ServiceHandler, arity: ServiceArity) -> crate::Result<()> {
         self.services.write().insert(
             name.to_owned(),
             InprocServiceEntry {
@@ -278,15 +268,14 @@ mod zenoh_service {
                         .map(|p| p.to_bytes().to_vec())
                         .unwrap_or_default();
 
-                    let request: ServiceRequest =
-                        match serde_json::from_slice(&req_bytes) {
-                            Ok(r) => r,
-                            Err(_) => ServiceRequest {
-                                request_id: 0,
-                                timeout_ms: 5000,
-                                payload: req_bytes,
-                            },
-                        };
+                    let request: ServiceRequest = match serde_json::from_slice(&req_bytes) {
+                        Ok(r) => r,
+                        Err(_) => ServiceRequest {
+                            request_id: 0,
+                            timeout_ms: 5000,
+                            payload: req_bytes,
+                        },
+                    };
 
                     let response = handler(request);
                     let resp_bytes = serde_json::to_vec(&ServiceResponseWire::from(&response))
@@ -332,17 +321,14 @@ mod zenoh_service {
                 .payload(ZBytes::from(req_bytes))
                 .timeout(timeout)
                 .wait()
-                .map_err(|e| {
-                    crate::Error::Communication(format!("service call failed: {e}"))
-                })?;
+                .map_err(|e| crate::Error::Communication(format!("service call failed: {e}")))?;
 
             // Unary: take first successful reply.
             let mut first_response: Option<ServiceResponse> = None;
             while let Ok(reply) = replies.recv() {
                 if let Ok(sample) = reply.into_result() {
                     let resp_bytes: Vec<u8> = sample.payload().to_bytes().to_vec();
-                    if let Ok(wire) = serde_json::from_slice::<ServiceResponseWire>(&resp_bytes)
-                    {
+                    if let Ok(wire) = serde_json::from_slice::<ServiceResponseWire>(&resp_bytes) {
                         let resp = wire.into_response();
                         if first_response.is_none() {
                             first_response = Some(resp);
@@ -356,9 +342,8 @@ mod zenoh_service {
                 }
             }
 
-            first_response.ok_or_else(|| {
-                crate::Error::Timeout(format!("service '{}' timed out", name))
-            })
+            first_response
+                .ok_or_else(|| crate::Error::Timeout(format!("service '{}' timed out", name)))
         }
 
         fn list_services(&self) -> Vec<String> {
@@ -493,10 +478,9 @@ mod tests {
         let backend = InprocServiceBackend::new();
 
         // Register an echo service
-        let handler: ServiceHandler = Arc::new(|req| ServiceResponse::ok(req.request_id, req.payload));
-        backend
-            .serve("echo", handler, ServiceArity::Unary)
-            .unwrap();
+        let handler: ServiceHandler =
+            Arc::new(|req| ServiceResponse::ok(req.request_id, req.payload));
+        backend.serve("echo", handler, ServiceArity::Unary).unwrap();
 
         assert_eq!(backend.list_services().len(), 1);
 

@@ -82,10 +82,7 @@ impl ParameterServer {
         let get_handler: ServiceHandler = Arc::new(move |req: ServiceRequest| {
             let payload: serde_json::Value =
                 serde_json::from_slice(&req.payload).unwrap_or_default();
-            let key = payload
-                .get("key")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let key = payload.get("key").and_then(|v| v.as_str()).unwrap_or("");
 
             let params = store_get.read();
             if let Some(value) = params.get(key) {
@@ -130,11 +127,7 @@ impl ParameterServer {
             });
             let topic = format!("rfx/param/{}/{}", node_for_set, key);
             let payload_bytes = notification.to_string().into_bytes();
-            transport_set.publish(
-                &topic,
-                Arc::from(payload_bytes.into_boxed_slice()),
-                None,
-            );
+            transport_set.publish(&topic, Arc::from(payload_bytes.into_boxed_slice()), None);
 
             let resp = serde_json::json!({"status": "ok"});
             ServiceResponse::ok(req.request_id, resp.to_string().into_bytes())
@@ -168,10 +161,7 @@ impl ParameterServer {
 
     /// Declare a parameter with a default value.
     pub fn declare(&self, key: &str, default: ParamValue) {
-        self.store
-            .write()
-            .entry(key.to_owned())
-            .or_insert(default);
+        self.store.write().entry(key.to_owned()).or_insert(default);
     }
 
     /// Get a parameter value (local read).
@@ -190,11 +180,8 @@ impl ParameterServer {
         });
         let topic = format!("rfx/param/{}/{}", self.node_name, key);
         let payload_bytes = notification.to_string().into_bytes();
-        self.transport.publish(
-            &topic,
-            Arc::from(payload_bytes.into_boxed_slice()),
-            None,
-        );
+        self.transport
+            .publish(&topic, Arc::from(payload_bytes.into_boxed_slice()), None);
         Ok(())
     }
 
@@ -318,8 +305,7 @@ mod tests {
     fn test_parameter_server_declare_get() {
         let service = InprocServiceBackend::new();
         let transport = Arc::new(InprocTransport::new());
-        let server =
-            ParameterServer::new("test_node", &service, transport.clone()).unwrap();
+        let server = ParameterServer::new("test_node", &service, transport.clone()).unwrap();
 
         server.declare("rate_hz", ParamValue::Float(50.0));
         assert_eq!(server.get("rate_hz"), Some(ParamValue::Float(50.0)));
@@ -332,13 +318,11 @@ mod tests {
         let transport = Arc::new(InprocTransport::new());
         let sub = transport.subscribe("rfx/param/test_node/rate_hz", 8);
 
-        let server =
-            ParameterServer::new("test_node", &service, transport.clone()).unwrap();
+        let server = ParameterServer::new("test_node", &service, transport.clone()).unwrap();
         server.set("rate_hz", ParamValue::Float(100.0)).unwrap();
 
         let env = sub.recv_timeout(Duration::from_millis(100)).unwrap();
-        let payload: serde_json::Value =
-            serde_json::from_slice(&env.payload).unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap();
         assert_eq!(payload["value"], 100.0);
         assert_eq!(payload["source_node"], "test_node");
     }
@@ -347,8 +331,7 @@ mod tests {
     fn test_parameter_server_list() {
         let service = InprocServiceBackend::new();
         let transport = Arc::new(InprocTransport::new());
-        let server =
-            ParameterServer::new("test_node", &service, transport).unwrap();
+        let server = ParameterServer::new("test_node", &service, transport).unwrap();
 
         server.declare("a", ParamValue::Int(1));
         server.declare("b", ParamValue::Int(2));
@@ -363,16 +346,13 @@ mod tests {
         let transport = Arc::new(InprocTransport::new());
 
         // Set up server
-        let _server =
-            ParameterServer::new("node_a", service.as_ref(), transport.clone()).unwrap();
+        let _server = ParameterServer::new("node_a", service.as_ref(), transport.clone()).unwrap();
 
         // Set up client
         let client = ParameterClient::new(service.clone(), transport.clone());
 
         // Set via client
-        client
-            .set("node_a", "kp", ParamValue::Float(3.14))
-            .unwrap();
+        client.set("node_a", "kp", ParamValue::Float(3.14)).unwrap();
 
         // Get via client
         let value = client.get("node_a", "kp").unwrap();
@@ -388,16 +368,14 @@ mod tests {
         let service = Arc::new(InprocServiceBackend::new());
         let transport = Arc::new(InprocTransport::new());
 
-        let server =
-            ParameterServer::new("node_b", service.as_ref(), transport.clone()).unwrap();
+        let server = ParameterServer::new("node_b", service.as_ref(), transport.clone()).unwrap();
         let client = ParameterClient::new(service.clone(), transport.clone());
 
         let watch = client.watch("node_b", "rate", 8);
         server.set("rate", ParamValue::Float(200.0)).unwrap();
 
         let env = watch.recv_timeout(Duration::from_millis(100)).unwrap();
-        let payload: serde_json::Value =
-            serde_json::from_slice(&env.payload).unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap();
         assert_eq!(payload["value"], 200.0);
     }
 

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rfx.dev/schemas/validate_report.schema.json",
+  "title": "rfx Dataset Validation Report",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "dataset_path",
+    "step_count",
+    "checks",
+    "defect_counts",
+    "passed"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "dataset_path": {
+      "type": "string"
+    },
+    "step_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    },
+    "defect_counts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "thresholds": {
+      "type": "object"
+    },
+    "stats": {
+      "type": "object"
+    },
+    "passed": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": true
+}

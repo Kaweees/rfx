@@ -1,5 +1,5 @@
 """
-rfx.Robot - The core interface for all robots
+rfx.robot - The core interface for all robots
 
 Three methods. That's it.
 
@@ -8,6 +8,10 @@ Example:
     >>> obs = robot.observe()           # Dict[str, Tensor]
     >>> robot.act(action)               # Execute action
     >>> obs = robot.reset()             # Reset and get initial obs
+
+Factory functions:
+    >>> from rfx.robot import lerobot
+    >>> arm = lerobot.so101()
 """
 
 from __future__ import annotations
@@ -182,3 +186,41 @@ class RobotBase(ABC):
             f"action_dim={self.action_dim}, "
             f"device='{self.device}')"
         )
+
+
+# Re-exports from submodules
+# Submodule access
+from . import config, discovery, graph, lerobot, urdf  # noqa: E402
+from .config import (  # noqa: E402
+    G1_CONFIG,
+    GO2_CONFIG,
+    SO101_CONFIG,
+    CameraConfig,
+    JointConfig,
+    RobotConfig,
+    load_config,
+)
+from .discovery import discover_ports, discover_so101_ports  # noqa: E402
+from .graph import discover_nodes  # noqa: E402
+from .urdf import URDF  # noqa: E402
+
+__all__ = [
+    "Robot",
+    "RobotBase",
+    "RobotConfig",
+    "CameraConfig",
+    "JointConfig",
+    "SO101_CONFIG",
+    "GO2_CONFIG",
+    "G1_CONFIG",
+    "load_config",
+    "URDF",
+    "discover_ports",
+    "discover_so101_ports",
+    "discover_nodes",
+    "config",
+    "urdf",
+    "lerobot",
+    "discovery",
+    "graph",
+]

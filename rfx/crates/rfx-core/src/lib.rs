@@ -44,16 +44,16 @@ pub mod control;
 pub mod hardware;
 pub mod math;
 pub mod neural;
+pub mod node;
 pub mod sim;
 
 // Re-exports for convenience
 pub use comm::{Channel, InprocTransport, Stream, Topic, TransportBackend};
 pub use comm::{
-    CongestionControl, Durability, Priority, QoSProfile, Reliability,
-    InprocServiceBackend, ServiceArity, ServiceBackend, ServiceRequest, ServiceResponse,
-    ServiceStatus, InprocDiscovery, DiscoveryBackend, DiscoveryConfig,
-    ParamValue, ParameterClient, ParameterServer,
-    MessageSchema, SchemaRegistry,
+    CongestionControl, DiscoveryBackend, DiscoveryConfig, Durability, InprocDiscovery,
+    InprocServiceBackend, MessageSchema, ParamValue, ParameterClient, ParameterServer, Priority,
+    QoSProfile, Reliability, SchemaRegistry, ServiceArity, ServiceBackend, ServiceRequest,
+    ServiceResponse, ServiceStatus,
 };
 
 #[cfg(feature = "zenoh")]
@@ -62,6 +62,7 @@ pub use control::{ControlLoop, ControlLoopHandle, Pid, PidConfig};
 pub use hardware::{Command, Robot, RobotState, Simulator};
 pub use math::{Filter, LowPassFilter, Quaternion, Transform};
 pub use neural::{ActionSpace, ObservationSpace, Space, SpaceType};
+pub use node::{RobotNode, RobotNodeConfig};
 pub use sim::{SimBackend, SimConfig};
 
 /// Crate version

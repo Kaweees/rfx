@@ -152,7 +152,7 @@ rfx.inspect_policy("runs/go2-walk-v1")
 | Robot | Type | Interface | Status |
 |-------|------|-----------|--------|
 | **SO-101** | 6-DOF arm | USB serial (Rust driver) | Ready |
-| **Unitree Go2** | Quadruped | Ethernet DDS (Zenoh/dust_dds) | Ready |
+| **Unitree Go2** | Quadruped | Ethernet (Zenoh transport) | Ready |
 
 Custom robots: implement `observe()` / `act()` / `reset()` or write a YAML config with URDF.
 
@@ -171,14 +171,13 @@ robot = rfx.MockRobot(state_dim=12, action_dim=6)
 
 ## Teleoperation
 
-Bimanual SO-101 recording at 350 Hz with LeRobot export:
+Bimanual SO-101 recording:
 
 ```python
-from rfx.teleop import BimanualSo101Session, TeleopSessionConfig
+from rfx.teleop import run, so101
 
-config = TeleopSessionConfig.from_yaml("so101_bimanual.yaml")
-session = BimanualSo101Session(config)
-session.run()
+arm = so101()
+run(arm, logging=True, rate_hz=200, duration_s=30.0)
 ```
 
 ## Communication and runtime
@@ -188,10 +187,11 @@ Under the hood, rfx has a full robotics communication stack built on [Zenoh](htt
 ```python
 from rfx.teleop import create_transport
 
-# Pub/sub messaging -- Rust-backed when available, Python fallback otherwise
-transport = create_transport(backend="zenoh")
+# Pub/sub messaging -- Zenoh transport (Rust-backed, compiled in by default)
+transport = create_transport()
 transport.publish("robot/state", state_bytes)
-transport.subscribe("robot/cmd", callback)
+sub = transport.subscribe("robot/cmd")
+envelope = sub.recv(timeout_s=1.0)
 ```
 
 Nodes follow a simple lifecycle contract:
@@ -227,9 +227,34 @@ rfx graph        # inspect the active node graph
 rfx topic-list   # see all live topics
 ```
 
-**ROS 2 coexistence**: rfx topics are visible to ROS 2 tools via the [zenoh-plugin-ros2dds](https://github.com/eclipse-zenoh/zenoh-plugin-ros2dds) bridge. Migrate incrementally -- run rfx nodes alongside existing ROS 2 nodes on the same DDS domain, no code changes required on either side.
+**ROS 2 coexistence**: rfx topics are visible to ROS 2 tools via the [zenoh-plugin-ros2dds](https://github.com/eclipse-zenoh/zenoh-plugin-ros2dds) bridge. Migrate incrementally -- run rfx nodes alongside existing ROS 2 nodes, no code changes required on either side.
 
 **Enterprise scaling**: The same code that runs on one robot runs on a fleet. No architecture changes, no extra infra. [Get in touch](https://discord.gg/xV8bAGM8WT) -- we'll handle scaling so you don't have to.
+
+### Production Zenoh setup
+
+Zenoh is compiled into the native extension by default -- no extra packages to install. Single-machine setups work out of the box with automatic peer discovery.
+
+For multi-machine deployments, pass endpoints explicitly:
+
+```python
+from rfx.node import auto_transport
+
+transport = auto_transport(
+    connect=["tcp/192.168.1.100:7447"],  # remote Zenoh router
+    shared_memory=True,                   # zero-copy on same machine
+)
+```
+
+Or configure via environment:
+
+```bash
+export RFX_ZENOH_CONNECT="tcp/192.168.1.100:7447"   # comma-separated endpoints
+export RFX_ZENOH_LISTEN="tcp/0.0.0.0:7447"           # listen for incoming peers
+export RFX_ZENOH_SHARED_MEMORY=0                      # disable shared memory if needed
+```
+
+Shared-memory transport is enabled by default for same-machine zero-copy between processes.
 
 ## rfxJIT
 

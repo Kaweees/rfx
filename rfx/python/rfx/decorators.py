@@ -1,5 +1,5 @@
 """
-Decorators for control loops and neural policies
+Decorators for control loops and neural policies.
 
 Provides decorators for defining control loops and tinygrad-based neural policies.
 """
@@ -8,11 +8,12 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import Any, ParamSpec, TypeVar
 
 from .jit import PolicyJitRuntime
 
-F = TypeVar("F", bound=Callable[..., Any])
+P = ParamSpec("P")
+R = TypeVar("R")
 
 try:
     from tinygrad.engine.jit import TinyJit
@@ -29,7 +30,7 @@ except ImportError:
 def control_loop(
     rate_hz: float = 500.0,
     name: str | None = None,
-) -> Callable[[F], F]:
+) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     Decorator to mark a function as a control loop callback.
 
@@ -52,21 +53,16 @@ def control_loop(
         >>> go2.run(balance_policy, timeout=30.0)
     """
 
-    def decorator(func: F) -> F:
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
         @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             return func(*args, **kwargs)
 
-        # Attach metadata to the function
-        wrapper._rfx_control_loop = True  # type: ignore
-        wrapper._rfx_rate_hz = rate_hz  # type: ignore
-        wrapper._rfx_name = name or func.__name__  # type: ignore
-        # Backward-compatible metadata aliases.
-        wrapper._pi_control_loop = True  # type: ignore
-        wrapper._pi_rate_hz = rate_hz  # type: ignore
-        wrapper._pi_name = name or func.__name__  # type: ignore
+        wrapper._rfx_control_loop = True  # type: ignore[attr-defined]
+        wrapper._rfx_rate_hz = rate_hz  # type: ignore[attr-defined]
+        wrapper._rfx_name = name or func.__name__  # type: ignore[attr-defined]
 
-        return wrapper  # type: ignore
+        return wrapper  # type: ignore[return-value]
 
     return decorator
 
@@ -74,7 +70,7 @@ def control_loop(
 def policy(
     model: str | None = None,
     jit: bool = False,
-) -> Callable[[F], F]:
+) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     Decorator to mark a function as a neural policy.
 
@@ -89,30 +85,13 @@ def policy(
         >>> from tinygrad import Tensor
         >>> import rfx
         >>>
-        >>> # Simple inline policy with JIT
         >>> @rfx.policy(jit=True)
         >>> def walking_policy(obs: Tensor) -> Tensor:
-        ...     # Your tinygrad forward pass here
         ...     return obs @ weights
-        >>>
-        >>> # Without JIT (for debugging)
-        >>> @rfx.policy(jit=False)
-        >>> def debug_policy(obs: Tensor) -> Tensor:
-        ...     print(f"obs shape: {obs.shape}")
-        ...     return obs @ weights
-
-    For more complex policies, consider subclassing rfx.nn.Policy instead:
-
-        >>> class WalkingPolicy(rfx.nn.Policy):
-        ...     def __init__(self):
-        ...         self.mlp = rfx.nn.MLP(48, 12)
-        ...
-        ...     def forward(self, obs: Tensor) -> Tensor:
-        ...         return self.mlp(obs)
     """
 
-    def decorator(func: F) -> F:
-        runtime: PolicyJitRuntime | None = None
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
+        runtime = None  # type: PolicyJitRuntime | None
 
         if model is not None:
 
@@ -121,7 +100,6 @@ def policy(
                 raise NotImplementedError(
                     "Neural network policies from model files are not implemented yet."
                 )
-        # Apply TinyJit if requested and available
         elif jit:
             if TINYGRAD_AVAILABLE:
                 fallback = TinyJit(func)
@@ -143,18 +121,13 @@ def policy(
             def wrapper(*args: Any, **kwargs: Any) -> Any:
                 return func(*args, **kwargs)
 
-        # Attach metadata
-        wrapper._rfx_policy = True  # type: ignore
-        wrapper._rfx_jit = jit  # type: ignore
-        wrapper._rfx_model = model  # type: ignore
-        wrapper._rfx_jit_backend = runtime.backend if runtime is not None else "disabled"  # type: ignore
-        wrapper._rfx_jit_runtime = runtime  # type: ignore
-        # Backward-compatible metadata aliases.
-        wrapper._pi_policy = True  # type: ignore
-        wrapper._pi_jit = jit  # type: ignore
-        wrapper._pi_model = model  # type: ignore
+        wrapper._rfx_policy = True  # type: ignore[attr-defined]
+        wrapper._rfx_jit = jit  # type: ignore[attr-defined]
+        wrapper._rfx_model = model  # type: ignore[attr-defined]
+        wrapper._rfx_jit_backend = runtime.backend if runtime is not None else "disabled"  # type: ignore[attr-defined]
+        wrapper._rfx_jit_runtime = runtime  # type: ignore[attr-defined]
 
-        return wrapper  # type: ignore
+        return wrapper  # type: ignore[return-value]
 
     return decorator
 

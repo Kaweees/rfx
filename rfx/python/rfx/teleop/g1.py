@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import torch
 
-from ..config import G1_CONFIG, RobotConfig
+from ..robot.config import G1_CONFIG, RobotConfig
 
 if TYPE_CHECKING:
     from .g1_obs import G1ObservationBuilder

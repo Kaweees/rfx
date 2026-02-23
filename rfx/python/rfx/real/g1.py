@@ -15,14 +15,14 @@ References:
 
 from __future__ import annotations
 
-import time
 import threading
+import time
 from typing import TYPE_CHECKING
 
 import torch
 
-from ..config import G1_CONFIG, RobotConfig
 from ..observation import make_observation
+from ..robot.config import G1_CONFIG, RobotConfig
 
 if TYPE_CHECKING:
     pass
@@ -296,7 +296,7 @@ class G1Backend:
 
         for step in range(ramp_steps):
             alpha = (step + 1) / ramp_steps
-            interp = [c + alpha * (t - c) for c, t in zip(current, target)]
+            interp = [c + alpha * (t - c) for c, t in zip(current, target, strict=False)]
             cmd = self._build_cmd(interp)
             self._cmd_pub.Write(cmd)
             time.sleep(0.01)

@@ -7,8 +7,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ..config import RobotConfig
 from ..robot import RobotBase
+from ..robot.config import RobotConfig
 
 if TYPE_CHECKING:
     import torch

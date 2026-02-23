@@ -22,7 +22,7 @@ pub use so101::{So101, So101Config, So101State};
 pub use go2::dds::CycloneDdsBackend;
 #[cfg(all(feature = "hardware-go2", feature = "zenoh"))]
 pub use go2::dds::ZenohDdsBackend;
-pub use traits::{Command, Robot, RobotState, Simulator};
+pub use traits::{Command, MockRobot, Robot, RobotState, Simulator};
 
 /// Motor indices for the Go2 quadruped
 pub mod motor_idx {

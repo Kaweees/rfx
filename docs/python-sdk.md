@@ -12,24 +12,23 @@ This document describes the Python SDK surface and package structure.
 ## SDK Entry Point
 
 ```python
-import rfx
+from rfx.robot import lerobot
+from rfx.teleop import run
 
-rfx.use("sim", "go2")  # optional provider activation from rfx namespace
-
-bot = rfx.connect_robot(
-    "go2",
-    backend="genesis",  # mock | genesis | mjx | real
-)
-
-bot.reset()
-bot.command(vx=0.6, vy=0.0, yaw=0.1)
-obs = bot.step()
-bot.close()
+arm = lerobot.so101()
+run(arm, logging=True)
 ```
 
-Everything starts from `import rfx`. You can still import other Python libraries (for example `torch`) in the same script as needed.
+Primary surfaces:
 
-When `config` is omitted, `rfx-sdk` now uses built-in defaults (`GO2_CONFIG`/`SO101_CONFIG`) so examples work from wheel installs without repo-local YAML files.
+- `rfx.robot` — Robot protocol, config, URDF, factory functions (`rfx.robot.lerobot`)
+- `rfx.teleop` — Teleoperation sessions, transport, recording
+- `rfx.collection` — Dataset recording, hub push/pull, collection helpers
+- `rfx.runtime` — CLI, lifecycle, health, otel
+- `rfx.sim` — Simulation backends
+- `rfx.nn` / `rfx.rl` — Neural policies and RL training
+
+When `config` is omitted, rfx uses built-in defaults (`GO2_CONFIG`/`SO101_CONFIG`) so examples work from wheel installs without repo-local YAML files.
 
 ## Model Management
 
@@ -149,26 +148,35 @@ rfx.run(robot, loaded, rate_hz=loaded.robot_config.control_freq_hz)
 
 ## Package Layout
 
-- `rfx`: base Python SDK and common interfaces
-- `rfx-sdk-sim`: simulation adapters/backends/controllers
-- `rfx-sdk-go2`: Unitree Go2-specific real/sim adapters and utilities
-- `rfx-sdk-lerobot`: LeRobot dataset/export integration
-
-These packages are scaffolded under `packages/` in this repository.
+```
+rfx/python/rfx/
+├── robot/          # Robot protocol, config, URDF, lerobot factories
+├── teleop/         # Teleoperation sessions, transport, recording
+├── collection/     # Dataset recording, hub integration, collect CLI helpers
+├── real/           # Real hardware backends (SO-101, Go2, G1)
+├── sim/            # Simulation backends (MuJoCo, Genesis, mock)
+├── nn/             # Neural network policies (MLP, ActorCritic)
+├── rl/             # RL training loops
+├── envs/           # Gym-style environments
+├── runtime/        # CLI, lifecycle, health, otel, dora bridge
+├── drivers/        # Hardware driver registry
+├── tf/             # Transform broadcaster/listener
+├── workflow/       # Training workflow stages
+├── agent.py        # LLM agent integration
+├── skills.py       # Skill registry
+├── hub.py          # Model save/load/push
+├── session.py      # Session runner
+├── decorators.py   # @control_loop, @policy, MotorCommands
+├── jit.py          # JIT compilation runtime
+├── node.py         # Zenoh transport factory & discovery
+└── observation.py  # Observation spec & padding
+```
 
 ## Boundary Rules
 
-- `rfx-sdk` (distribution) should not depend on `rfx-sdk-go2` or `rfx-sdk-lerobot`.
-- `rfx-sdk-sim` can depend on `rfx-sdk`, and optional simulators.
-- `rfx-sdk-go2` can depend on `rfx-sdk` and optionally `rfx-sdk-sim`.
-- `rfx-sdk-lerobot` can depend on `rfx-sdk` and `lerobot`.
-
-## Migration Plan
-
-1. Keep current imports working from `rfx`.
-2. Move provider-specific code into `packages/rfx-go2`.
-3. Move simulator-specific extras into `packages/rfx-sim`.
-4. Keep `rfx.connect_robot(...)` stable and route through installed providers.
+- `rfx-sdk` (distribution) should not depend on robot-specific hardware packages.
+- Simulation backends are optional (installed via `rfx-sdk[teleop]`).
+- LeRobot integration is optional (installed via `rfx-sdk[teleop-lerobot]`).
 
 ## Run Example
 

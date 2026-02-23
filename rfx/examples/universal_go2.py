@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 """
-Canonical Go2 control example for rfx.
+Canonical Go2 simulation control example for the lean SDK.
 
-Use this file to validate one command-level workflow across multiple
-backends (`mock`, `genesis`, `mjx`, `real`) without changing your
-control code. This is the reference script for the "one API, many
-backends" story.
+Use this file to validate one control workflow across simulation
+backends (`mock`, `genesis`, `mjx`) without mixed wrappers.
 
 Usage:
     uv run --python 3.13 rfx/examples/universal_go2.py --backend genesis --auto-install
@@ -15,7 +13,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import time
 from pathlib import Path
 
 import rfx
@@ -23,8 +20,8 @@ from rfx.config import GO2_CONFIG
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Universal Go2 runner (sim/real)")
-    parser.add_argument("--backend", choices=["mock", "genesis", "mjx", "real"], default="genesis")
+    parser = argparse.ArgumentParser(description="Go2 runner (simulation backends)")
+    parser.add_argument("--backend", choices=["mock", "genesis", "mjx"], default="genesis")
     parser.add_argument("--config", default=None, help="Optional path to a Go2 YAML config")
     parser.add_argument("--steps", type=int, default=2000)
     parser.add_argument("--vx", type=float, default=0.6)
@@ -48,27 +45,31 @@ def main() -> None:
         kwargs["viewer"] = not args.headless
         kwargs["auto_install"] = args.auto_install
 
-    bot = rfx.connect_robot(
-        "go2",
+    robot = rfx.sim.SimRobot.from_config(
         backend=args.backend,
         config=config,
         num_envs=args.num_envs,
         device=args.device,
         **kwargs,
     )
-    print(f"Connected universal bot: robot={bot.robot_name} backend={bot.backend}")
-    bot.reset()
-    bot.command(vx=args.vx, vy=args.vy, yaw=args.yaw)
+    print(f"Connected sim robot: backend={args.backend} num_envs={args.num_envs}")
+    obs = robot.reset()
+    print(f"initial_state_norm={obs['state'].norm(dim=-1).mean().item():.4f}")
+
+    try:
+        import torch
+    except ModuleNotFoundError as exc:
+        raise RuntimeError("torch is required for this simulation example") from exc
 
     try:
         for step in range(args.steps):
-            obs = bot.step()
+            action = torch.zeros((robot.num_envs, robot.max_action_dim), device=robot.device)
+            obs = robot.observe()
+            robot.act(action)
             if step % 200 == 0:
                 print(f"step={step:5d} state_norm={obs['state'].norm(dim=-1).mean().item():.4f}")
-            if args.backend != "real" and not args.headless:
-                time.sleep(0.01)
     finally:
-        bot.close()
+        robot.close()
 
 
 if __name__ == "__main__":
