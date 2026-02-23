@@ -28,12 +28,12 @@ import numpy as np
 NUM_MOTORS = 29
 
 # G1 physical constants (meters) from ExtremControl / OpenTeleVision
-G1_SHOULDER_Y = 0.100        # lateral distance from torso center to shoulder
-G1_ARM_LENGTH = 0.398         # upper arm + forearm total length
-G1_PELVIS_Z = 0.769           # pelvis height in standing pose
+G1_SHOULDER_Y = 0.100  # lateral distance from torso center to shoulder
+G1_ARM_LENGTH = 0.398  # upper arm + forearm total length
+G1_PELVIS_Z = 0.769  # pelvis height in standing pose
 G1_PELVIS_SHOULDER_Z = 0.289  # vertical distance pelvis -> shoulder
-G1_PELVIS_TORSO_Z = 0.044     # vertical distance pelvis -> torso IMU
-G1_LEG_LENGTH = 0.500         # approximate standing leg length
+G1_PELVIS_TORSO_Z = 0.044  # vertical distance pelvis -> torso IMU
+G1_LEG_LENGTH = 0.500  # approximate standing leg length
 
 # Number of tracked links (SE(3) targets)
 NUM_TRACKED_LINKS = 6
@@ -104,9 +104,7 @@ class CalibrationData:
 
     # Head reference for yaw alignment
     head_yaw_offset: float = 0.0
-    head_position_ref: np.ndarray = field(
-        default_factory=lambda: np.zeros(3, dtype=np.float64)
-    )
+    head_position_ref: np.ndarray = field(default_factory=lambda: np.zeros(3, dtype=np.float64))
 
     calibrated: bool = False
 
@@ -162,9 +160,17 @@ class G1Retargeter(RetargetBase):
         # right_ankle_roll: at ground, right side
         self._default_targets[1][:3, 3] = [0.0, -0.05, 0.0]
         # left_wrist_yaw: at side
-        self._default_targets[2][:3, 3] = [0.0, G1_SHOULDER_Y + G1_ARM_LENGTH * 0.3, G1_PELVIS_Z + G1_PELVIS_SHOULDER_Z]
+        self._default_targets[2][:3, 3] = [
+            0.0,
+            G1_SHOULDER_Y + G1_ARM_LENGTH * 0.3,
+            G1_PELVIS_Z + G1_PELVIS_SHOULDER_Z,
+        ]
         # right_wrist_yaw: at side
-        self._default_targets[3][:3, 3] = [0.0, -(G1_SHOULDER_Y + G1_ARM_LENGTH * 0.3), G1_PELVIS_Z + G1_PELVIS_SHOULDER_Z]
+        self._default_targets[3][:3, 3] = [
+            0.0,
+            -(G1_SHOULDER_Y + G1_ARM_LENGTH * 0.3),
+            G1_PELVIS_Z + G1_PELVIS_SHOULDER_Z,
+        ]
         # torso
         self._default_targets[4][:3, 3] = [0.0, 0.0, G1_PELVIS_Z + G1_PELVIS_TORSO_Z]
         # pelvis
@@ -246,7 +252,7 @@ class G1Retargeter(RetargetBase):
                 arm_scale = arm_scale or 1.0
 
             for hand_pose, link_idx, sign in [
-                (left_hand, 2, 1.0),   # left_wrist_yaw
+                (left_hand, 2, 1.0),  # left_wrist_yaw
                 (right_hand, 3, -1.0),  # right_wrist_yaw
             ]:
                 # Hand position relative to head, in local frame
@@ -260,11 +266,13 @@ class G1Retargeter(RetargetBase):
                 hand_rel_scaled = hand_rel_local * arm_scale
 
                 # Place relative to G1 shoulder
-                shoulder_pos = np.array([
-                    0.0,
-                    sign * G1_SHOULDER_Y,
-                    G1_PELVIS_Z + G1_PELVIS_SHOULDER_Z,
-                ])
+                shoulder_pos = np.array(
+                    [
+                        0.0,
+                        sign * G1_SHOULDER_Y,
+                        G1_PELVIS_Z + G1_PELVIS_SHOULDER_Z,
+                    ]
+                )
                 target_pos = shoulder_pos + hand_rel_scaled
 
                 # Rotation: rotate hand orientation into yaw-aligned frame

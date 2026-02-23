@@ -54,7 +54,11 @@ def _discover_entry_points() -> None:
         from importlib.metadata import entry_points
 
         eps = entry_points()
-        rfx_eps = eps.select(group="rfx.drivers") if hasattr(eps, "select") else eps.get("rfx.drivers", [])
+        rfx_eps = (
+            eps.select(group="rfx.drivers")
+            if hasattr(eps, "select")
+            else eps.get("rfx.drivers", [])
+        )
         for ep in rfx_eps:
             try:
                 driver_cls = ep.load()

@@ -150,7 +150,7 @@ class TransformBuffer:
         with self._lock:
             # Build adjacency from known edges
             adj: dict[str, set[str]] = {}
-            for (p, c) in self._transforms:
+            for p, c in self._transforms:
                 adj.setdefault(p, set()).add(c)
                 adj.setdefault(c, set()).add(p)
 
@@ -167,7 +167,7 @@ class TransformBuffer:
                     if neighbor == target_frame:
                         # Compose chain
                         result = TransformStamped.identity(source_frame, source_frame)
-                        for (p, c) in new_path:
+                        for p, c in new_path:
                             tf = self._get_latest(p, c)
                             if tf is None:
                                 return None
@@ -187,7 +187,7 @@ class TransformBuffer:
     def all_frames(self) -> list[str]:
         with self._lock:
             frames = set()
-            for (p, c) in self._transforms:
+            for p, c in self._transforms:
                 frames.add(p)
                 frames.add(c)
             return sorted(frames)
@@ -202,6 +202,7 @@ class TransformBroadcaster:
 
     def send_transform(self, tf: TransformStamped) -> None:
         import json
+
         key = f"rfx/tf/{tf.parent_frame}/{tf.child_frame}"
         self._transport.publish(key, json.dumps(tf.to_dict()))
         if self._buffer is not None:
@@ -251,6 +252,7 @@ class TransformListener:
 
     def _listen_loop(self) -> None:
         import json
+
         while self._running:
             env = self._sub.recv(timeout_s=0.5)
             if env is None:

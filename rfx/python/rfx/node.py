@@ -123,10 +123,7 @@ def discover_ports() -> list[dict[str, Any]]:
         hwid = (port_info.hwid or "").lower()
 
         # Feetech STS3215 USB-serial adapters (CH340, CP210x, FTDI)
-        if any(
-            tag in desc
-            for tag in ("ch340", "cp210", "ft232", "usb serial", "usb-serial")
-        ):
+        if any(tag in desc for tag in ("ch340", "cp210", "ft232", "usb serial", "usb-serial")):
             robot_type = "so101"
         elif any(tag in hwid for tag in ("1a86:", "10c4:", "0403:")):
             # CH340 (1a86), CP210x (10c4), FTDI (0403) vendor IDs
@@ -229,10 +226,7 @@ def create(
     # deterministic argument errors even when transport infra is unavailable.
     supported_types = {"so101", "go2"}
     if robot_type not in supported_types:
-        raise ValueError(
-            f"Unsupported robot_type: {robot_type!r}. "
-            "Supported: 'so101', 'go2'"
-        )
+        raise ValueError(f"Unsupported robot_type: {robot_type!r}. Supported: 'so101', 'go2'")
 
     try:
         from rfx._rfx import RobotNode as _RustRobotNode

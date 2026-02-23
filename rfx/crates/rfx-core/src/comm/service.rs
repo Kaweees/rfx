@@ -61,13 +61,18 @@ impl ServiceStatus {
         }
     }
 
-    pub fn from_str(s: &str) -> Self {
+}
+
+impl std::str::FromStr for ServiceStatus {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "ok" => Self::Ok,
-            "error" => Self::Error,
-            "timeout" => Self::Timeout,
-            "canceled" => Self::Canceled,
-            _ => Self::Error,
+            "ok" => Ok(Self::Ok),
+            "error" => Ok(Self::Error),
+            "timeout" => Ok(Self::Timeout),
+            "canceled" => Ok(Self::Canceled),
+            _ => Err(()),
         }
     }
 }
@@ -395,7 +400,7 @@ mod zenoh_service {
         fn into_response(self) -> ServiceResponse {
             ServiceResponse {
                 request_id: self.request_id,
-                status: ServiceStatus::from_str(&self.status),
+                status: self.status.parse::<ServiceStatus>().unwrap_or(ServiceStatus::Error),
                 error_code: self.error_code,
                 error_message: self.error_message,
                 payload: base64_decode(&self.payload),
@@ -541,7 +546,7 @@ mod tests {
             ServiceStatus::Timeout,
             ServiceStatus::Canceled,
         ] {
-            assert_eq!(ServiceStatus::from_str(status.as_str()), status);
+            assert_eq!(status.as_str().parse::<ServiceStatus>(), Ok(status));
         }
     }
 }

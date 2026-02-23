@@ -42,9 +42,7 @@ def test_auto_transport_raises_without_zenoh(monkeypatch) -> None:
     import rfx.node as node_mod
 
     # Simulate missing Rust bindings
-    monkeypatch.setattr(
-        node_mod, "__name__", node_mod.__name__
-    )  # no-op to trigger fresh import
+    monkeypatch.setattr(node_mod, "__name__", node_mod.__name__)  # no-op to trigger fresh import
     original_import = __builtins__.__import__ if hasattr(__builtins__, "__import__") else __import__
 
     def fake_import(name, *args, **kwargs):

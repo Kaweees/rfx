@@ -352,11 +352,13 @@ mod tests {
         let client = ParameterClient::new(service.clone(), transport.clone());
 
         // Set via client
-        client.set("node_a", "kp", ParamValue::Float(3.14)).unwrap();
+        client
+            .set("node_a", "kp", ParamValue::Float(std::f64::consts::PI))
+            .unwrap();
 
         // Get via client
         let value = client.get("node_a", "kp").unwrap();
-        assert_eq!(value, ParamValue::Float(3.14));
+        assert_eq!(value, ParamValue::Float(std::f64::consts::PI));
 
         // List via client
         let keys = client.list("node_a").unwrap();
@@ -384,7 +386,7 @@ mod tests {
         for val in [
             ParamValue::Bool(true),
             ParamValue::Int(42),
-            ParamValue::Float(3.14),
+            ParamValue::Float(std::f64::consts::PI),
             ParamValue::String("hello".into()),
         ] {
             let json = val.to_json();

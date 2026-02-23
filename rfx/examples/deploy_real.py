@@ -62,8 +62,10 @@ class SimpleVLA(nn.Module):
     def __init__(self, state_dim: int, action_dim: int):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(state_dim, 256), nn.ReLU(),
-            nn.Linear(256, 256), nn.ReLU(),
+            nn.Linear(state_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
             nn.Linear(256, action_dim),
         )
 
@@ -78,7 +80,9 @@ def main():
     parser.add_argument("--checkpoint", default=None, help="Path to trained checkpoint (.pt)")
     parser.add_argument("--mock", action="store_true", help="Use MockRobot (no hardware)")
     parser.add_argument("--rate", type=float, default=50, help="Control loop Hz")
-    parser.add_argument("--duration", type=float, default=None, help="Seconds to run (default: infinite)")
+    parser.add_argument(
+        "--duration", type=float, default=None, help="Seconds to run (default: infinite)"
+    )
     args = parser.parse_args()
 
     # -------------------------------------------------------------------
@@ -125,7 +129,9 @@ def main():
     stats = rfx.run(robot, policy, rate_hz=args.rate, duration=args.duration)
 
     print(f"\nDone — {stats.iterations} steps, {stats.overruns} overruns")
-    print(f"  avg period:  {stats.avg_period_s * 1000:.2f} ms  (target: {stats.target_period_s * 1000:.2f} ms)")
+    print(
+        f"  avg period:  {stats.avg_period_s * 1000:.2f} ms  (target: {stats.target_period_s * 1000:.2f} ms)"
+    )
     print(f"  jitter p50:  {stats.p50_jitter_s * 1000:.2f} ms")
     print(f"  jitter p95:  {stats.p95_jitter_s * 1000:.2f} ms")
 

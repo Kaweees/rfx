@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import serial
 
 
-HDR = b"\xFF\xFF"
+HDR = b"\xff\xff"
 INST_PING = 0x01
 INST_WRITE = 0x03
 
@@ -115,7 +115,9 @@ def normalize_ids(ser: serial.Serial, ids: list[int], yes: bool) -> None:
         print("IDs already normalized to 1..6")
         return
     if len(ids) != 6:
-        raise RuntimeError(f"Need exactly 6 responsive motors to normalize IDs, found {len(ids)}: {ids}")
+        raise RuntimeError(
+            f"Need exactly 6 responsive motors to normalize IDs, found {len(ids)}: {ids}"
+        )
 
     maybe_confirm(
         yes,
@@ -147,7 +149,9 @@ def normalize_ids(ser: serial.Serial, ids: list[int], yes: bool) -> None:
 
     verified = scan_ids(ser, 1, 6)
     if verified != targets:
-        raise RuntimeError(f"ID normalization verification failed. Found IDs 1..6 subset: {verified}")
+        raise RuntimeError(
+            f"ID normalization verification failed. Found IDs 1..6 subset: {verified}"
+        )
     print("ID normalization complete: [1, 2, 3, 4, 5, 6]")
 
 
@@ -183,7 +187,9 @@ def main() -> int:
     parser.add_argument("--scan-start", type=int, default=1)
     parser.add_argument("--scan-end", type=int, default=20)
     parser.add_argument("--normalize-ids", action="store_true", help="Normalize IDs to 1..6")
-    parser.add_argument("--set-baud-1m", action="store_true", help="Write motor baud register to 1Mbps")
+    parser.add_argument(
+        "--set-baud-1m", action="store_true", help="Write motor baud register to 1Mbps"
+    )
     parser.add_argument("--torque-on", action="store_true", help="Enable torque after setup")
     parser.add_argument("--torque-off", action="store_true", help="Disable torque after setup")
     parser.add_argument("--yes", action="store_true", help="Skip interactive confirmations")

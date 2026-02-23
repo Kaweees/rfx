@@ -80,12 +80,8 @@ class G1SafetyLayer:
         # Build limit tensors from joint configs
         joints = self._robot_config.joints
         if joints:
-            self._pos_min = torch.tensor(
-                [j.position_min for j in joints], dtype=torch.float32
-            )
-            self._pos_max = torch.tensor(
-                [j.position_max for j in joints], dtype=torch.float32
-            )
+            self._pos_min = torch.tensor([j.position_min for j in joints], dtype=torch.float32)
+            self._pos_max = torch.tensor([j.position_max for j in joints], dtype=torch.float32)
         else:
             self._pos_min = torch.full((NUM_MOTORS,), -3.14159)
             self._pos_max = torch.full((NUM_MOTORS,), 3.14159)
@@ -100,7 +96,9 @@ class G1SafetyLayer:
             (position_target, velocity_feedforward) — both shape (29,).
         """
         if self._estopped:
-            target = self._last_target if self._last_target is not None else self._default_pos.clone()
+            target = (
+                self._last_target if self._last_target is not None else self._default_pos.clone()
+            )
             return target, torch.zeros(NUM_MOTORS, dtype=torch.float32)
 
         if raw_action.dim() == 2:
@@ -254,14 +252,17 @@ class G1TeleopSession:
         # Lazy-init components
         if self._obs_builder is None:
             from .g1_obs import G1ObservationBuilder
+
             self._obs_builder = G1ObservationBuilder()
 
         if self._retargeter is None:
             from .retarget import G1Retargeter
+
             self._retargeter = G1Retargeter()
 
         if self._vr_publisher is None:
             from .vr import VRMotionPublisher
+
             self._vr_publisher = VRMotionPublisher()
 
         # Reset components
@@ -276,9 +277,7 @@ class G1TeleopSession:
 
         # Calibration phase
         if hasattr(self._retargeter, "calibrate"):
-            print(
-                f"Hold T-pose for calibration ({self.config.calibration_s}s)..."
-            )
+            print(f"Hold T-pose for calibration ({self.config.calibration_s}s)...")
             time.sleep(self.config.calibration_s)
             vr_poses = self._vr_publisher.latest_poses
             self._retargeter.calibrate(vr_poses)
@@ -370,9 +369,7 @@ class G1TeleopSession:
                 # Compute tracking deltas for observation
                 tracking_deltas = None
                 if hasattr(self._retargeter, "get_tracking_deltas"):
-                    tracking_deltas = self._retargeter.get_tracking_deltas(
-                        retarget_targets
-                    )
+                    tracking_deltas = self._retargeter.get_tracking_deltas(retarget_targets)
 
                 # 3. Get raw robot observation
                 if has_raw_observe:
@@ -410,7 +407,8 @@ class G1TeleopSession:
                     )
                 else:
                     action_padded = torch.zeros(
-                        1, self._robot._action_dim if hasattr(self._robot, '_action_dim') else 29,
+                        1,
+                        self._robot._action_dim if hasattr(self._robot, "_action_dim") else 29,
                         dtype=torch.float32,
                     )
                     action_padded[0, :NUM_MOTORS] = pos_target

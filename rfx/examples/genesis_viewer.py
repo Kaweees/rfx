@@ -41,8 +41,12 @@ def main():
     parser.add_argument("--substeps", type=int, default=4, help="Physics substeps per step")
     parser.add_argument("--dt", type=float, default=None, help="Override timestep (seconds)")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
-    parser.add_argument("--sleep", type=float, default=0.0, help="Wall-clock delay per step (seconds)")
-    parser.add_argument("--auto-install", action="store_true", help="Auto-install genesis-world if missing")
+    parser.add_argument(
+        "--sleep", type=float, default=0.0, help="Wall-clock delay per step (seconds)"
+    )
+    parser.add_argument(
+        "--auto-install", action="store_true", help="Auto-install genesis-world if missing"
+    )
     args = parser.parse_args()
 
     # -------------------------------------------------------------------

@@ -49,11 +49,14 @@ class SimpleVLA(nn.Module):
     def __init__(self, state_dim: int, action_dim: int):
         super().__init__()
         self.encoder = nn.Sequential(
-            nn.Linear(state_dim, 256), nn.ReLU(),
-            nn.Linear(256, 256), nn.ReLU(),
+            nn.Linear(state_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
         )
         self.head = nn.Sequential(
-            nn.Linear(256, 256), nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
             nn.Linear(256, action_dim),
         )
 

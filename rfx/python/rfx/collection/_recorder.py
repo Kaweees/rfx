@@ -15,9 +15,7 @@ if TYPE_CHECKING:
 from ._dataset import Dataset
 
 
-def _dataset_add_frame(
-    dataset: Any, frame: dict[str, Any], task_name: str
-) -> None:
+def _dataset_add_frame(dataset: Any, frame: dict[str, Any], task_name: str) -> None:
     """Add a frame to a LeRobotDataset with version-compat fallback."""
     add_frame = getattr(dataset, "add_frame", None)
     if add_frame is None:
@@ -35,9 +33,7 @@ def _dataset_add_frame(
             return
         except Exception as exc:
             last_error = exc
-    raise RuntimeError(
-        "Unable to add frame to LeRobot dataset"
-    ) from last_error
+    raise RuntimeError("Unable to add frame to LeRobot dataset") from last_error
 
 
 class Recorder:
@@ -132,13 +128,9 @@ class Recorder:
             )
             if images:
                 for name, img in images.items():
-                    frame[f"observation.images.{name}"] = np.asarray(
-                        img, dtype=np.uint8
-                    )
+                    frame[f"observation.images.{name}"] = np.asarray(img, dtype=np.uint8)
 
-            _dataset_add_frame(
-                self._dataset._inner, frame, self._current_task
-            )
+            _dataset_add_frame(self._dataset._inner, frame, self._current_task)
             self._frame_count += 1
 
             if self._mcap_writer:
@@ -150,9 +142,7 @@ class Recorder:
             if not self._episode_active:
                 raise RuntimeError("No active episode to save.")
 
-            save_episode = getattr(
-                self._dataset._inner, "save_episode", None
-            )
+            save_episode = getattr(self._dataset._inner, "save_episode", None)
             if save_episode is not None:
                 save_episode()
 

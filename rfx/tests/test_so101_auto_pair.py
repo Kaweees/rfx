@@ -60,9 +60,7 @@ def test_auto_pair_persists_identity_across_port_renumber(monkeypatch, tmp_path:
     assert (leader2, follower2) == ("/dev/ttyACM7", "/dev/ttyACM3")
 
 
-def test_auto_pair_uses_deterministic_fallback_without_mapping(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_auto_pair_uses_deterministic_fallback_without_mapping(monkeypatch, tmp_path: Path) -> None:
     map_path = tmp_path / "so101_port_map.json"
     monkeypatch.setenv("RFX_SO101_PORT_MAP", str(map_path))
 

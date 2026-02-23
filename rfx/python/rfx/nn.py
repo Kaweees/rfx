@@ -506,11 +506,22 @@ class TorchJitPolicy(Policy):
             return self._model(x)
 
     def config_dict(self) -> dict[str, Any]:
-        return {"model_path": self.model_path, "obs_keys": list(self.obs_keys), "device": self.device}
+        return {
+            "model_path": self.model_path,
+            "obs_keys": list(self.obs_keys),
+            "device": self.device,
+        }
 
-    def save(self, path: str | Path, *, robot_config: Any | None = None,
-             normalizer: Any | None = None, training_info: dict[str, Any] | None = None) -> Path:
+    def save(
+        self,
+        path: str | Path,
+        *,
+        robot_config: Any | None = None,
+        normalizer: Any | None = None,
+        training_info: dict[str, Any] | None = None,
+    ) -> Path:
         import shutil
+
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
         if self.model_path is not None:
@@ -519,8 +530,13 @@ class TorchJitPolicy(Policy):
             if src.resolve() != dst.resolve():
                 shutil.copy2(src, dst)
         config: dict[str, Any] = {
-            "rfx_version": rfx.__version__, "policy_type": type(self).__name__,
-            "policy_config": {"model_path": "model.pt", "obs_keys": list(self.obs_keys), "device": self.device},
+            "rfx_version": rfx.__version__,
+            "policy_type": type(self).__name__,
+            "policy_config": {
+                "model_path": "model.pt",
+                "obs_keys": list(self.obs_keys),
+                "device": self.device,
+            },
         }
         if robot_config is not None:
             config["robot_config"] = robot_config.to_dict()
@@ -538,8 +554,11 @@ class TorchJitPolicy(Policy):
             return cls(model_path=str(path))
         config = json.loads((path / "rfx_config.json").read_text())
         pc = config["policy_config"]
-        return cls(model_path=str(path / pc.get("model_path", "model.pt")),
-                   obs_keys=pc.get("obs_keys", ["state"]), device=pc.get("device", "cpu"))
+        return cls(
+            model_path=str(path / pc.get("model_path", "model.pt")),
+            obs_keys=pc.get("obs_keys", ["state"]),
+            device=pc.get("device", "cpu"),
+        )
 
     def __repr__(self) -> str:
         return f"TorchJitPolicy(model_path={self.model_path!r}, obs_keys={self.obs_keys})"

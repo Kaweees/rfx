@@ -44,10 +44,12 @@ _ENV_PATTERN = re.compile(r"\$\{(\w+)(?::([^}]*))?\}")
 
 def _substitute_env(value: str) -> str:
     """Substitute ${VAR} or ${VAR:default} patterns with environment variables."""
+
     def _replace(m: re.Match) -> str:
         var_name = m.group(1)
         default = m.group(2)
         return os.environ.get(var_name, default if default is not None else m.group(0))
+
     return _ENV_PATTERN.sub(_replace, value)
 
 

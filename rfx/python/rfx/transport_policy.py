@@ -62,7 +62,9 @@ class KeySpacePolicy:
         self.validate_key(pattern)
         if any(_patterns_overlap(pattern, local) for local in self.local_only_patterns):
             # Local-only wins.
-            if not any(_patterns_overlap(pattern, remote) for remote in self.zenoh_required_patterns):
+            if not any(
+                _patterns_overlap(pattern, remote) for remote in self.zenoh_required_patterns
+            ):
                 return False
         return any(_patterns_overlap(pattern, remote) for remote in self.zenoh_required_patterns)
 

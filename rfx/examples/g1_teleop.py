@@ -55,7 +55,9 @@ def main():
     parser.add_argument("--rate", type=float, default=50, help="Control loop Hz")
     parser.add_argument("--duration", type=float, default=None, help="Seconds to run")
     parser.add_argument("--ip", default="192.168.123.161", help="G1 robot IP address")
-    parser.add_argument("--calibration-time", type=float, default=3.0, help="T-pose calibration seconds")
+    parser.add_argument(
+        "--calibration-time", type=float, default=3.0, help="T-pose calibration seconds"
+    )
     args = parser.parse_args()
 
     # --- Robot ---
@@ -68,6 +70,7 @@ def main():
         )
     else:
         from rfx.real import G1Robot
+
         robot = G1Robot(ip_address=args.ip)
 
     print(f"Robot: {robot}")

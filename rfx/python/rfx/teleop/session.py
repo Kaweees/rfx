@@ -471,7 +471,9 @@ class BimanualSo101Session:
             dt = loop_start - last_loop_start
             last_loop_start = loop_start
             should_trace_tick = (self._iterations % self._otel_sample_every) == 0
-            span_ctx = self._tracer.start_as_current_span("teleop.tick") if should_trace_tick else None
+            span_ctx = (
+                self._tracer.start_as_current_span("teleop.tick") if should_trace_tick else None
+            )
 
             try:
                 if span_ctx is not None:
@@ -536,7 +538,9 @@ class BimanualSo101Session:
             else:
                 next_deadline = time.perf_counter()
 
-    def _maybe_log_live_trace(self, *, pair_positions: Mapping[str, Sequence[float]], dt_s: float) -> None:
+    def _maybe_log_live_trace(
+        self, *, pair_positions: Mapping[str, Sequence[float]], dt_s: float
+    ) -> None:
         if self._trace_every <= 0:
             return
         if (self._iterations % self._trace_every) != 0:
@@ -809,7 +813,9 @@ def _run_teleop(
 
     sess = BimanualSo101Session(config=TeleopSessionConfig(**cfg_kwargs))
     if data_spec.enabled:
-        duration = data_spec.duration_s if data_spec.duration_s is not None else session_spec.duration_s
+        duration = (
+            data_spec.duration_s if data_spec.duration_s is not None else session_spec.duration_s
+        )
         if duration is not None:
             return sess.record_episode(
                 duration_s=float(duration),

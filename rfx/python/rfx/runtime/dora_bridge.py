@@ -14,9 +14,7 @@ class DoraCliError(RuntimeError):
 def _dora_bin() -> str:
     dora_bin = shutil.which("dora")
     if dora_bin is None:
-        raise DoraCliError(
-            "Dora CLI not found in PATH. Install with: pip install dora-rs-cli"
-        )
+        raise DoraCliError("Dora CLI not found in PATH. Install with: pip install dora-rs-cli")
     return dora_bin
 
 

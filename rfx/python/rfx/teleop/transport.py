@@ -343,7 +343,9 @@ class HybridTransport:
     - Mirrors control-plane keys to Zenoh based on configured patterns.
     """
 
-    def __init__(self, local: TransportLike, zenoh: ZenohTransport | None, config: HybridConfig) -> None:
+    def __init__(
+        self, local: TransportLike, zenoh: ZenohTransport | None, config: HybridConfig
+    ) -> None:
         self._local = local
         self._zenoh = zenoh
         self._policy = policy_from_hybrid_config(config)
@@ -396,9 +398,7 @@ class HybridTransport:
         )
         if self._policy.should_mirror_to_zenoh(key):
             if self._zenoh is None:
-                raise RuntimeError(
-                    f"Zenoh control plane is unavailable for required key {key!r}."
-                )
+                raise RuntimeError(f"Zenoh control plane is unavailable for required key {key!r}.")
             self._zenoh.publish(
                 key,
                 payload,
@@ -478,7 +478,11 @@ def create_transport(config: TransportConfig) -> TransportLike:
     if backend == "hybrid":
         from .config import HybridConfig, ZenohConfig
 
-        local = RustTransport() if bool(config.zero_copy_hot_path) and rust_transport_available() else InprocTransport()
+        local = (
+            RustTransport()
+            if bool(config.zero_copy_hot_path) and rust_transport_available()
+            else InprocTransport()
+        )
         zenoh_cfg = config.zenoh if config.zenoh is not None else ZenohConfig()
         hybrid_cfg = config.hybrid if config.hybrid is not None else HybridConfig()
         zenoh = ZenohTransport(

@@ -43,9 +43,7 @@ def main():
                 for name in model.link_names
                 if name not in model._children  # links with no children
             ]
-            positions = {
-                name: model.link_position(name, q) for name in leaf_links[:4]
-            }
+            positions = {name: model.link_position(name, q) for name in leaf_links[:4]}
             print(f"  step {step}: {positions}")
 
     robot.close()

@@ -120,9 +120,7 @@ class Go2Backend:
             name = "go2"
 
         # Build RobotNode for Go2 (publishes state/commands via Zenoh transport)
-        self._node = _RustRobotNode.go2(
-            name, ip_address, transport, edu_mode, 50.0
-        )
+        self._node = _RustRobotNode.go2(name, ip_address, transport, edu_mode, 50.0)
         self._state_sub = self._node.subscribe_state()
         self._backend_mode = "rust"
 
@@ -338,9 +336,7 @@ class Go2Backend:
             angular_vel = torch.zeros(3, dtype=torch.float32)
             linear_acc = torch.zeros(3, dtype=torch.float32)
         else:
-            positions = torch.tensor(
-                [m.q for m in low_state.motor_state[:12]], dtype=torch.float32
-            )
+            positions = torch.tensor([m.q for m in low_state.motor_state[:12]], dtype=torch.float32)
             velocities = torch.tensor(
                 [m.dq for m in low_state.motor_state[:12]], dtype=torch.float32
             )

@@ -90,8 +90,12 @@ def main():
     parser.add_argument("--camera-ids", default="0,1,2", help="Comma-separated camera device IDs")
     parser.add_argument("--camera-fps", type=int, default=30, help="Camera FPS")
     parser.add_argument("--label", default="teleop", help="Episode label")
-    parser.add_argument("--export-format", default="none", choices=["none", "lerobot", "mcap", "both"])
-    parser.add_argument("--lerobot-repo-id", default=None, help="HuggingFace repo ID for LeRobot export")
+    parser.add_argument(
+        "--export-format", default="none", choices=["none", "lerobot", "mcap", "both"]
+    )
+    parser.add_argument(
+        "--lerobot-repo-id", default=None, help="HuggingFace repo ID for LeRobot export"
+    )
     parser.add_argument("--lerobot-root", default="lerobot_datasets")
     parser.add_argument("--lerobot-task", default=None)
     parser.add_argument("--mcap-root", default="mcap_exports")
@@ -165,7 +169,9 @@ def main():
                     output_dir=args.mcap_root,
                     include_camera_frames=not args.mcap_no_camera_frames,
                 )
-                print(f"MCAP export: path={summary['mcap_path']} msgs={summary['control_messages']}")
+                print(
+                    f"MCAP export: path={summary['mcap_path']} msgs={summary['control_messages']}"
+                )
             except Exception as exc:
                 print(f"MCAP export failed: {exc}")
 
@@ -240,7 +246,9 @@ def main():
         session.stop()
 
     stats = session.timing_stats()
-    print(f"\nDone — {stats.iterations} iterations, {stats.overruns} overruns, p99={stats.p99_jitter_s * 1e3:.3f}ms")
+    print(
+        f"\nDone — {stats.iterations} iterations, {stats.overruns} overruns, p99={stats.p99_jitter_s * 1e3:.3f}ms"
+    )
 
 
 if __name__ == "__main__":

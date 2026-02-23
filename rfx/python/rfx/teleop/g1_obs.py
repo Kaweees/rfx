@@ -39,11 +39,13 @@ BASE_OBS_DIM = 29 + 29 + 29 + 3 + 1 + 3 + 18 + 36 + 3  # = 151
 def _quat_to_rotation_matrix(q: torch.Tensor) -> torch.Tensor:
     """Convert quaternion (w, x, y, z) to 3x3 rotation matrix."""
     w, x, y, z = q[0], q[1], q[2], q[3]
-    return torch.stack([
-        torch.stack([1 - 2*(y*y + z*z), 2*(x*y - w*z), 2*(x*z + w*y)]),
-        torch.stack([2*(x*y + w*z), 1 - 2*(x*x + z*z), 2*(y*z - w*x)]),
-        torch.stack([2*(x*z - w*y), 2*(y*z + w*x), 1 - 2*(x*x + y*y)]),
-    ])
+    return torch.stack(
+        [
+            torch.stack([1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)]),
+            torch.stack([2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)]),
+            torch.stack([2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)]),
+        ]
+    )
 
 
 def _projected_gravity(quat: torch.Tensor) -> torch.Tensor:
@@ -79,14 +81,11 @@ class G1ObservationBuilder:
         self.config = config or G1ObsConfig()
 
         if self.config.default_dof_pos is not None:
-            self._default_dof_pos = torch.tensor(
-                self.config.default_dof_pos, dtype=torch.float32
-            )
+            self._default_dof_pos = torch.tensor(self.config.default_dof_pos, dtype=torch.float32)
         else:
             from ..real.g1 import G1_DEFAULT_DOF_POS
-            self._default_dof_pos = torch.tensor(
-                G1_DEFAULT_DOF_POS, dtype=torch.float32
-            )
+
+            self._default_dof_pos = torch.tensor(G1_DEFAULT_DOF_POS, dtype=torch.float32)
 
         self._last_action = torch.zeros(NUM_MOTORS, dtype=torch.float32)
         self._ref_base_yaw: float = 0.0
@@ -141,9 +140,7 @@ class G1ObservationBuilder:
         # Compute base yaw from quaternion
         # yaw = atan2(2*(w*z + x*y), 1 - 2*(y*y + z*z))
         w, x, y, z = quat[0], quat[1], quat[2], quat[3]
-        current_yaw = torch.atan2(
-            2 * (w * z + x * y), 1 - 2 * (y * y + z * z)
-        ).item()
+        current_yaw = torch.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z)).item()
 
         # Diff base yaw (scalar)
         diff_yaw = torch.tensor([self._ref_base_yaw - current_yaw], dtype=torch.float32)
@@ -155,11 +152,14 @@ class G1ObservationBuilder:
         c_yaw = np.cos(-current_yaw)
         s_yaw = np.sin(-current_yaw)
         dp = self._ref_base_pos - torch.tensor([0.0, 0.0, 0.0])  # base at origin
-        diff_pos_local = torch.tensor([
-            c_yaw * dp[0].item() - s_yaw * dp[1].item(),
-            s_yaw * dp[0].item() + c_yaw * dp[1].item(),
-            dp[2].item(),
-        ], dtype=torch.float32)
+        diff_pos_local = torch.tensor(
+            [
+                c_yaw * dp[0].item() - s_yaw * dp[1].item(),
+                s_yaw * dp[0].item() + c_yaw * dp[1].item(),
+                dp[2].item(),
+            ],
+            dtype=torch.float32,
+        )
 
         # Tracking link deltas
         if tracking_deltas is not None:
@@ -175,9 +175,7 @@ class G1ObservationBuilder:
                 pos_delta_local[i, 1] = s_yaw * p[0] + c_yaw * p[1]
                 pos_delta_local[i, 2] = p[2]
 
-            link_pos_delta = torch.from_numpy(
-                pos_delta_local.flatten().astype(np.float32)
-            )
+            link_pos_delta = torch.from_numpy(pos_delta_local.flatten().astype(np.float32))
             link_rot_6d = torch.from_numpy(rot_6d_np)
         else:
             link_pos_delta = torch.zeros(18, dtype=torch.float32)
@@ -185,15 +183,15 @@ class G1ObservationBuilder:
 
         # Assemble observation in ExtremControl order
         parts = [
-            self._last_action,                  # (29,)
-            dof_pos,                             # (29,)
-            dof_vel * VEL_SCALE,                 # (29,)
-            ang_vel_local,                       # (3,)
-            diff_yaw,                            # (1,)
-            diff_pos_local,                      # (3,)
-            link_pos_delta,                      # (18,)
-            link_rot_6d,                         # (36,)
-            proj_grav,                           # (3,)
+            self._last_action,  # (29,)
+            dof_pos,  # (29,)
+            dof_vel * VEL_SCALE,  # (29,)
+            ang_vel_local,  # (3,)
+            diff_yaw,  # (1,)
+            diff_pos_local,  # (3,)
+            link_pos_delta,  # (18,)
+            link_rot_6d,  # (36,)
+            proj_grav,  # (3,)
         ]
 
         if motion_obs is not None:

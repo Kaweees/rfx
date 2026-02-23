@@ -11,9 +11,7 @@ from typing import Any
 def add_collect_args(parser: argparse.ArgumentParser) -> None:
     """Add args to the collect subcommand."""
     parser.add_argument("--robot", required=True, help="robot type (e.g. so101)")
-    parser.add_argument(
-        "--repo-id", required=True, help="HuggingFace dataset repo ID"
-    )
+    parser.add_argument("--repo-id", required=True, help="HuggingFace dataset repo ID")
     parser.add_argument("--output", "-o", default="datasets", help="output root directory")
     parser.add_argument(
         "--episodes", "-n", type=int, default=1, help="number of episodes to collect"
@@ -23,12 +21,8 @@ def add_collect_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--task", default="default", help="task label for episodes")
     parser.add_argument("--fps", type=int, default=30, help="recording frame rate")
-    parser.add_argument(
-        "--push", action="store_true", help="push to Hub after collection"
-    )
-    parser.add_argument(
-        "--mcap", action="store_true", help="also log MCAP sidecar"
-    )
+    parser.add_argument("--push", action="store_true", help="push to Hub after collection")
+    parser.add_argument("--mcap", action="store_true", help="also log MCAP sidecar")
     parser.add_argument("--state-dim", type=int, default=6, help="state dimension")
 
 

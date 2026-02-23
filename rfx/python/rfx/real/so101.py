@@ -127,7 +127,9 @@ def _interactive_pair_setup() -> tuple[dict[str, Any], dict[str, Any]] | None:
     input("3) Plug the FOLLOWER arm USB adapter, then press Enter...")
     two_ports = _wait_for_port_count(2, timeout_s=30.0)
     if len(two_ports) != 2:
-        print(f"Expected 2 SO-101 ports after follower plug, found {len(two_ports)}. Skipping wizard.")
+        print(
+            f"Expected 2 SO-101 ports after follower plug, found {len(two_ports)}. Skipping wizard."
+        )
         return None
 
     leader_fp = _port_fingerprint(leader)
@@ -146,9 +148,7 @@ def _auto_port() -> str:
 
     ports = _node_mod.discover_so101_ports()
     if not ports:
-        raise RuntimeError(
-            "No SO-101 arm detected. Plug in the Feetech USB adapter and try again."
-        )
+        raise RuntimeError("No SO-101 arm detected. Plug in the Feetech USB adapter and try again.")
     if len(ports) > 1:
         logger.info("Multiple SO-101 ports found: %s — using %s", ports, ports[0])
     return ports[0]
@@ -173,7 +173,9 @@ def _auto_pair() -> tuple[str, str]:
     by_fingerprint = {_port_fingerprint(p): p for p in all_ports}
 
     leader: dict[str, Any] | None = by_fingerprint.get(str(mapping.get("leader_fingerprint", "")))
-    follower: dict[str, Any] | None = by_fingerprint.get(str(mapping.get("follower_fingerprint", "")))
+    follower: dict[str, Any] | None = by_fingerprint.get(
+        str(mapping.get("follower_fingerprint", ""))
+    )
     if leader is not None and follower is not None and leader.get("port") != follower.get("port"):
         _remember_pair(leader, follower)
         logger.info(
@@ -264,9 +266,7 @@ class So101Backend:
             name = f"so101-{'leader' if is_leader else 'follower'}"
 
         # RobotNode: connects hardware, publishes state, accepts commands
-        self._node = _RustRobotNode.so101(
-            name, port, transport, is_leader, baudrate, 50.0
-        )
+        self._node = _RustRobotNode.so101(name, port, transport, is_leader, baudrate, 50.0)
         with self._tracer.start_as_current_span("so101.node_init") as span:
             span.set_attribute("name", str(name))
             span.set_attribute("port", str(port))

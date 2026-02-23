@@ -40,9 +40,7 @@ class McapSidecar:
         try:
             from mcap.writer import Writer
         except ImportError as exc:
-            raise ImportError(
-                "MCAP sidecar requires: pip install mcap"
-            ) from exc
+            raise ImportError("MCAP sidecar requires: pip install mcap") from exc
 
         self._episode_id = episode_id
         self._frame_count = 0

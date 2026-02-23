@@ -346,7 +346,9 @@ def _add_collect_stage_args(parser: argparse.ArgumentParser) -> None:
     """Add collection-specific args to the collect subcommand."""
     parser.add_argument("--repo-id", default=None, help="HuggingFace dataset repo ID")
     parser.add_argument("--episodes", "-n", type=int, default=1, help="number of episodes")
-    parser.add_argument("--duration", "-d", type=float, default=None, help="duration per episode (s)")
+    parser.add_argument(
+        "--duration", "-d", type=float, default=None, help="duration per episode (s)"
+    )
     parser.add_argument("--task", default="default", help="task label")
     parser.add_argument("--fps", type=int, default=30, help="recording frame rate")
     parser.add_argument("--push", action="store_true", help="push to Hub after collection")

@@ -211,9 +211,7 @@ class TestRecorder:
         recorder.add_frame(state=state)
 
         frame, _ = recorder.dataset._inner.frames[0]
-        np.testing.assert_array_equal(
-            frame["observation.state"], frame["action"]
-        )
+        np.testing.assert_array_equal(frame["observation.state"], frame["action"])
 
     def test_multiple_episodes(self, monkeypatch):
         _install_fake_lerobot(monkeypatch)

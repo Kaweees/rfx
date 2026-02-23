@@ -34,45 +34,117 @@ NUM_MOTOR_SLOTS = 35
 # Default standing pose (radians) — matches ExtremControl default_dof_pos
 G1_DEFAULT_DOF_POS = [
     # Left leg (0-5): hip_pitch, hip_roll, hip_yaw, knee, ankle_pitch, ankle_roll
-    -0.1, 0.0, 0.0, 0.3, -0.2, 0.0,
+    -0.1,
+    0.0,
+    0.0,
+    0.3,
+    -0.2,
+    0.0,
     # Right leg (6-11)
-    -0.1, 0.0, 0.0, 0.3, -0.2, 0.0,
+    -0.1,
+    0.0,
+    0.0,
+    0.3,
+    -0.2,
+    0.0,
     # Waist (12-14): yaw, roll, pitch
-    0.0, 0.0, 0.0,
+    0.0,
+    0.0,
+    0.0,
     # Left arm (15-21): shoulder_pitch, shoulder_roll, shoulder_yaw, elbow,
     #                    wrist_roll, wrist_pitch, wrist_yaw
-    0.3, 0.2, 0.0, -0.5, 0.0, 0.0, 0.0,
+    0.3,
+    0.2,
+    0.0,
+    -0.5,
+    0.0,
+    0.0,
+    0.0,
     # Right arm (22-28)
-    0.3, -0.2, 0.0, -0.5, 0.0, 0.0, 0.0,
+    0.3,
+    -0.2,
+    0.0,
+    -0.5,
+    0.0,
+    0.0,
+    0.0,
 ]
 
 # Per-joint PD gains from ExtremControl
 # Format: kp values for all 29 joints
 G1_KP = [
     # Left leg: hip_pitch, hip_roll, hip_yaw, knee, ankle_pitch, ankle_roll
-    100.0, 100.0, 100.0, 100.0, 30.0, 30.0,
+    100.0,
+    100.0,
+    100.0,
+    100.0,
+    30.0,
+    30.0,
     # Right leg
-    100.0, 100.0, 100.0, 100.0, 30.0, 30.0,
+    100.0,
+    100.0,
+    100.0,
+    100.0,
+    30.0,
+    30.0,
     # Waist: yaw, roll, pitch
-    100.0, 150.0, 150.0,
+    100.0,
+    150.0,
+    150.0,
     # Left arm: shoulder_pitch, shoulder_roll, shoulder_yaw, elbow,
     #           wrist_roll, wrist_pitch, wrist_yaw
-    30.0, 30.0, 11.0, 15.0, 10.0, 13.0, 12.0,
+    30.0,
+    30.0,
+    11.0,
+    15.0,
+    10.0,
+    13.0,
+    12.0,
     # Right arm
-    30.0, 30.0, 11.0, 15.0, 10.0, 13.0, 12.0,
+    30.0,
+    30.0,
+    11.0,
+    15.0,
+    10.0,
+    13.0,
+    12.0,
 ]
 
 G1_KD = [
     # Left leg
-    20.0, 20.0, 20.0, 20.0, 6.0, 6.0,
+    20.0,
+    20.0,
+    20.0,
+    20.0,
+    6.0,
+    6.0,
     # Right leg
-    20.0, 20.0, 20.0, 20.0, 6.0, 6.0,
+    20.0,
+    20.0,
+    20.0,
+    20.0,
+    6.0,
+    6.0,
     # Waist
-    10.0, 10.0, 10.0,
+    10.0,
+    10.0,
+    10.0,
     # Left arm
-    6.0, 6.0, 2.2, 3.0, 2.0, 2.6, 2.4,
+    6.0,
+    6.0,
+    2.2,
+    3.0,
+    2.0,
+    2.6,
+    2.4,
     # Right arm
-    6.0, 6.0, 2.2, 3.0, 2.0, 2.6, 2.4,
+    6.0,
+    6.0,
+    2.2,
+    3.0,
+    2.0,
+    2.6,
+    2.4,
 ]
 
 
@@ -250,12 +322,8 @@ class G1Backend:
                 [low_state.motor_state[i].dq for i in range(NUM_MOTORS)],
                 dtype=torch.float32,
             ),
-            "quat": torch.tensor(
-                list(low_state.imu_state.quaternion), dtype=torch.float32
-            ),
-            "ang_vel": torch.tensor(
-                list(low_state.imu_state.gyroscope), dtype=torch.float32
-            ),
+            "quat": torch.tensor(list(low_state.imu_state.quaternion), dtype=torch.float32),
+            "ang_vel": torch.tensor(list(low_state.imu_state.gyroscope), dtype=torch.float32),
             "foot_contacts": torch.tensor(
                 [low_state.foot_force[i] > 10.0 for i in range(4)],
                 dtype=torch.float32,

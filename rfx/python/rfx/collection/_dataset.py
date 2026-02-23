@@ -30,8 +30,7 @@ def _load_lerobot_dataset_class() -> Any:
             return mod.LeRobotDataset
 
     raise ImportError(
-        "LeRobot package is unavailable. "
-        "Install with: pip install -e '.[collection]'"
+        "LeRobot package is unavailable. Install with: pip install -e '.[collection]'"
     )
 
 
@@ -51,9 +50,7 @@ def _create_lerobot_dataset(
 
     create = getattr(dataset_cls, "create", None)
     if create is None:
-        raise AttributeError(
-            "LeRobotDataset.create is unavailable in this package version"
-        )
+        raise AttributeError("LeRobotDataset.create is unavailable in this package version")
 
     attempts = [
         lambda: create(
@@ -72,9 +69,7 @@ def _create_lerobot_dataset(
             features=features,
             use_videos=use_videos,
         ),
-        lambda: create(
-            repo_id=repo_id, root=str(root), fps=fps, features=features
-        ),
+        lambda: create(repo_id=repo_id, root=str(root), fps=fps, features=features),
         lambda: create(repo_id, fps, features=features, root=str(root)),
         lambda: create(repo_id=repo_id, root=str(root), fps=fps),
     ]
@@ -86,9 +81,7 @@ def _create_lerobot_dataset(
         except Exception as exc:
             last_error = exc
 
-    raise RuntimeError(
-        "Unable to instantiate LeRobotDataset with known signatures"
-    ) from last_error
+    raise RuntimeError("Unable to instantiate LeRobotDataset with known signatures") from last_error
 
 
 def _build_features(
@@ -160,9 +153,7 @@ class Dataset:
         return cls(inner)
 
     @classmethod
-    def from_hub(
-        cls, repo_id: str, *, root: str | Path = "datasets"
-    ) -> Dataset:
+    def from_hub(cls, repo_id: str, *, root: str | Path = "datasets") -> Dataset:
         """Pull a dataset from HuggingFace Hub."""
         dataset_cls = _load_lerobot_dataset_class()
         inner = dataset_cls(repo_id=repo_id, root=str(Path(root)))
@@ -172,9 +163,7 @@ class Dataset:
         """Push dataset to HuggingFace Hub."""
         push_to_hub = getattr(self._inner, "push_to_hub", None)
         if push_to_hub is None:
-            raise AttributeError(
-                "LeRobotDataset instance has no push_to_hub method"
-            )
+            raise AttributeError("LeRobotDataset instance has no push_to_hub method")
         if repo_id is not None:
             push_to_hub(repo_id)
         else:
