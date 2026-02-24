@@ -43,6 +43,26 @@ teleop = [
     "torch>=2.2",
     "mcap>=1.1.0",
 ]
+# Simulation backends
+sim-genesis = [
+    "torch>=2.2",
+    "genesis-world>=0.4.0",
+]
+sim-mjx = [
+    "torch>=2.2",
+    "mujoco>=3.0",
+    "mujoco-mjx>=3.0",
+    "jax[cuda13]>=0.8",
+    "warp-lang",
+]
+sim-mock = [
+    "torch>=2.2",
+]
+sim = [
+    "rfx-sdk[sim-genesis]",
+    "rfx-sdk[sim-mjx]",
+    "rfx-sdk[sim-mock]",
+]
 # Direct LeRobot package export support
 teleop-lerobot = [
     "lerobot",
@@ -62,6 +82,7 @@ dev = [
 # All optional dependencies
 all = [
     "rfx-sdk[agent]",
+    "rfx-sdk[sim]",
     "rfx-sdk[teleop]",
     "rfx-sdk[teleop-lerobot]",
     "rfx-sdk[collection]",
